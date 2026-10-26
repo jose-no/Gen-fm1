@@ -126,7 +126,7 @@ if (typeof registerProcessor === "function") {
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
       if (ex.web_gen_info) {                          // the generative machine's state, when it changes
-        const g = new Uint8Array(mem, ex.web_gen_info(), 33).slice(), key = g.join(",");
+        const g = new Uint8Array(mem, ex.web_gen_info(), 37).slice(), key = g.join(",");
         if (key !== this.sentGen) { this.sentGen = key; msg.gen = g; }
       }
       if (msg.leds || msg.fb || msg.sectors || msg.gen || msg.load !== undefined) this.port.postMessage(msg, transfer);

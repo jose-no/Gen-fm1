@@ -34,7 +34,7 @@ enum {
     GP_TRK = 16
 };
 enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,
-       GK_LEN, GK_N = 16 };
+       GK_LEN, GK_DMSRC, GK_DMRATE, GK_DMDEPTH, GK_N = 16 };
 
 /* the master rate: steps (1/16) per chord, 1/2 bar .. 32 bars, odd lengths too */
 static const uint16_t GEN_RATE[] = {8, 16, 32, 48, 64, 80, 96, 112, 128, 192, 256, 384, 512};
@@ -42,6 +42,11 @@ static const uint16_t GEN_RATE[] = {8, 16, 32, 48, 64, 80, 96, 112, 128, 192, 25
 /* per-track multipliers of the master period: x1/4 x1/2 x1 x2 x3 x4 x8 (num / den) */
 static const uint8_t GEN_MNUM[] = {1, 1, 1, 2, 3, 4, 8}, GEN_MDEN[] = {4, 2, 1, 1, 1, 1, 1};
 #define GEN_NMULT 7u
+
+/* DENSITY's modulation: shapes, and periods in steps (1/4 bar .. 32 bars) */
+enum { GDM_OFF, GDM_SINE, GDM_TRI, GDM_UP, GDM_DOWN, GDM_SQUARE, GDM_RAND, GDM_DRIFT, GDM_COUNT };
+static const uint16_t GEN_DMRATE[] = {4, 8, 16, 32, 64, 128, 256, 512};
+#define GEN_NDMRATE (sizeof GEN_DMRATE / sizeof GEN_DMRATE[0])
 
 /* FIXED / PENDULUM progressions, scale degrees from 0 (I) */
 static const int8_t GEN_PRESETS[][4] = {
@@ -76,6 +81,8 @@ typedef struct {
     uint8_t mult, lock, freeze, out, mode, rhy, dens, leap, rest, patch, mute;
     int8_t oct;
     uint8_t len;         /* steps in the pattern, 1..16 (the tracks may differ: polymeter) */
+    uint8_t dmsrc, dmrate;               /* DENSITY's modulation: its shape (GDM_*) and its period (GEN_DMRATE) */
+    int8_t dmdepth;                      /* how far it moves DENSITY, -100..100 (negative: upside down) */
 } gen_trk_t;
 
 static struct {
@@ -235,6 +242,49 @@ static uint32_t gen_chord_at(uint32_t ti, uint32_t s, uint32_t *change)
     return (s / p) % (gen.llen ? gen.llen : 1u);
 }
 
+/* ------------------------------------------------------------- density's modulation --- */
+/* a value -256..256 for period k of track ti: the same every time (a hash, no state), so a song plays back alike */
+static int32_t gen_hash(uint32_t ti, uint32_t k)
+{
+    uint32_t h = (k + 1u) * 0x9E3779B1u ^ (ti + 1u) * 0x85EBCA77u;
+    h ^= h >> 15;
+    h *= 0x2C1B3C6Du;
+    h ^= h >> 12;
+    return (int32_t)(h % 513u) - 256;
+}
+/* the shape at step s: -256..256, synced to PLAY */
+static int32_t gen_dm_shape(uint32_t ti, uint32_t s)
+{
+    const gen_trk_t *k = &gen.tk[ti];
+    uint32_t p = GEN_DMRATE[k->dmrate % GEN_NDMRATE], q = s / p;
+    int32_t x = (int32_t)((s % p) * 1024u / p);                /* the phase, 0..1023 */
+    switch (k->dmsrc) {
+    case GDM_SINE: {                                           /* two parabolas: within 6 % of a sine */
+        int32_t h = x & 511, y = h * (512 - h) / 256;          /* 0..256..0 over half a cycle */
+        return x < 512 ? y : -y;
+    }
+    case GDM_TRI: return x < 512 ? -256 + x : 256 - (x - 512);
+    case GDM_UP: return -256 + x / 2;
+    case GDM_DOWN: return 256 - x / 2;
+    case GDM_SQUARE: return x < 512 ? 256 : -256;
+    case GDM_RAND: return gen_hash(ti, q);
+    case GDM_DRIFT: {                                          /* random, glided from one value to the next */
+        int32_t a = gen_hash(ti, q), b = gen_hash(ti, q + 1u);
+        return a + (b - a) * x / 1024;
+    }
+    default: return 0;
+    }
+}
+/* track ti's DENSITY at step s, 0..100: the setting moved by its modulation */
+static uint32_t gen_dens(uint32_t ti, uint32_t s)
+{
+    const gen_trk_t *k = &gen.tk[ti];
+    int32_t d = k->dens;
+    if (k->dmsrc && k->dmdepth)
+        d += (int32_t)k->dmdepth * gen_dm_shape(ti, s) / 256;
+    return (uint32_t)(d < 0 ? 0 : d > 100 ? 100 : d);
+}
+
 /* --------------------------------------------------------------------- writing --- */
 static uint32_t gen_len(uint32_t ti) { uint32_t n = gen.tk[ti].len; return n < 1u ? 1u : n > GEN_STEPS ? GEN_STEPS : n; }
 static uint32_t gen_idx;                 /* the pattern step being written (gen_write) */
@@ -262,7 +312,7 @@ static void gen_put(step_t *st, const int32_t *notes, uint32_t n, uint32_t time,
 static uint32_t gen_dyad_hit(uint32_t ti, uint32_t s, uint32_t idx, uint32_t *tie)
 {
     const gen_trk_t *k = &gen.tk[ti];
-    uint32_t change, d = k->dens, hit, n = gen_len(ti);
+    uint32_t change, d = gen_dens(ti, s), hit, n = gen_len(ti);
     const gen_dec_t *dc = &gen.dec[ti][idx];
     (void)gen_chord_at(ti, s, &change);
     *tie = 0;
@@ -356,7 +406,8 @@ static void gen_write_dyad(track_t *t, uint32_t ti, uint32_t s)
     while (nn[1] - nn[0] > 19)
         nn[1] -= 12;
     if (k->rhy == GY_ARP) {                                    /* one tone at a time, up and down */
-        int32_t one = ((s / (k->dens < 40u ? 4u : k->dens < 80u ? 2u : 1u)) & 1u) ? nn[1] : nn[0];
+        uint32_t d = gen_dens(ti, s);
+        int32_t one = ((s / (d < 40u ? 4u : d < 80u ? 2u : 1u)) & 1u) ? nn[1] : nn[0];
         gen_put(st, &one, 1, ST_NOTE, idx % 4u ? 84u : 104u);
         return;
     }
@@ -367,7 +418,7 @@ static void gen_write_bass(track_t *t, uint32_t s)
 {
     gen_trk_t *k = &gen.tk[GT_BASS];
     uint32_t idx = gen_idx, change, r = gen.dec[GT_BASS][idx].r, ci = gen_chord_at(GT_BASS, s, &change);
-    uint32_t n = gen_len(GT_BASS), kk = (2u + k->dens * 10u / 100u) * n / 16u, i = idx, hit, p;
+    uint32_t dn = gen_dens(GT_BASS, s), n = gen_len(GT_BASS), kk = (2u + dn * 10u / 100u) * n / 16u, i = idx, hit, p;
     int32_t c = gen.src == GS_PEDAL ? 0 : gen.loop[ci], d = c, oct = 2 + k->oct, x;
     step_t *st = &t->step[idx];
     kk = kk ? kk : 1u;
@@ -375,7 +426,7 @@ static void gen_write_bass(track_t *t, uint32_t s)
     if (!change && (r % 100u) < gen.mut / 4u)
         hit = !hit;
     if (!hit) {
-        gen_put(st, 0, 0, k->dens < 35u ? ST_TIE : ST_REST, 0);
+        gen_put(st, 0, 0, dn < 35u ? ST_TIE : ST_REST, 0);
         return;
     }
     switch (k->mode) {
@@ -420,7 +471,7 @@ static void gen_write_mel(track_t *t, uint32_t s)
     uint32_t idx = gen_idx, change;
     gen_dec_t *dc = &gen.dec[GT_MEL][idx];
     int32_t c = gen.loop[gen_chord_at(GT_MEL, s, &change)], x;
-    uint32_t r = dc->r, strong = idx % 4u == 0u, dens = k->dens + (strong ? 20u : 0u);
+    uint32_t r = dc->r, strong = idx % 4u == 0u, dens = gen_dens(GT_MEL, s) + (strong ? 20u : 0u);
     step_t *st = &t->step[idx];
     if ((r % 100u) >= dens || ((r >> 7) % 100u) < k->rest) {
         gen_put(st, 0, 0, ((r >> 14) % 100u) < k->rest ? ST_REST : ST_TIE, 0);
@@ -573,11 +624,11 @@ static void gen_note_off(track_t *t, uint32_t note)
 static void gen_defaults(void)
 {
     static const gen_trk_t D[NPART] = {
-        /* mult lock frz out mode     rhy      dens leap rest patch mute oct len */
-        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0, 16},      /* dyad A: TINE EP */
-        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0, 16},    /* dyad B: PAD, x2 */
-        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0, 16},             /* bass: FM BASS, locked */
-        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0, 16},         /* melody: PLUCK */
+        /* mult lock frz out mode     rhy      dens leap rest patch mute oct len dm: src rate depth */
+        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0, 16, 0, 3, 0},      /* dyad A: TINE EP */
+        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0, 16, 0, 3, 0},    /* dyad B: PAD, x2 */
+        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0, 16, 0, 3, 0},             /* bass: FM BASS, locked */
+        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0, 16, 0, 3, 0},         /* melody: PLUCK */
     };
     uint32_t i;
     gen.root = 0;

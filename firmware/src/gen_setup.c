@@ -73,6 +73,9 @@ static void gen_set(uint32_t id, int32_t v)
                 gen_track_sound(ti);
             break;
         case GK_MUTE: g->mute = (uint8_t)(v != 0); break;
+        case GK_DMSRC: g->dmsrc = (uint8_t)gen_lim(v, 0, GDM_COUNT - 1); break;
+        case GK_DMRATE: g->dmrate = (uint8_t)gen_lim(v, 0, GEN_NDMRATE - 1); break;
+        case GK_DMDEPTH: g->dmdepth = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
         case GK_LEN:
             g->len = (uint8_t)gen_lim(v, 1, GEN_STEPS);
             if (gen.on)

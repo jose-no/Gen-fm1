@@ -2,7 +2,7 @@
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 16 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), its MIDI OUT as it happens (web_midi_out).
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15 };
 const gtk = (t, k) => 16 + t * 16 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
 const $ = (id) => document.getElementById(id);
@@ -28,6 +28,8 @@ const TRACKS = [
     d: { patch: 7, mult: 2, lock: 0, mode: 2, dens: 45, oct: 0, leap: 25, rest: 20 } },
 ];
 const RHYTHMS = ["Sustain", "Pulse", "Arpeggio", "Euclidean"];
+const DMSHAPES = ["Off", "Sine", "Triangle", "Ramp up", "Ramp down", "Square", "Random", "Drift"];
+const DMRATES = ["¼ bar", "½ bar", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars", "32 bars"];
 let genOn = false, genPlaying = false, genState = null, umask = 0xAB5, rootNow = 0;
 
 const opts = (sel, list, val) => { sel.innerHTML = list.map((n, i) => `<option value="${i}">${n}</option>`).join(""); sel.value = String(val); };
@@ -90,6 +92,14 @@ const cards = TRACKS.map((T, t) => {
       <label>Output <select id="${id("out")}"></select></label>
     </div>
     <label class="wide">Density <input type="range" id="${id("dens")}" min="0" max="100"> <output id="${id("dens-o")}"></output></label>
+    <div class="dmod">
+      <div class="grid2">
+        <label>Density mod <select id="${id("dmsrc")}"></select></label>
+        <label>Mod rate <select id="${id("dmrate")}"></select></label>
+      </div>
+      <label class="wide">Mod depth <input type="range" id="${id("dmdepth")}" min="-100" max="100" value="0"> <output id="${id("dmdepth-o")}">0</output></label>
+      <div class="meter" aria-label="Density now"><span id="${id("dnow")}"></span><em id="${id("dnow-o")}">–</em></div>
+    </div>
     ${T.melody ? `<label class="wide">Leaps <input type="range" id="${id("leap")}" min="0" max="100"> <output id="${id("leap-o")}"></output></label>
     <label class="wide">Rests <input type="range" id="${id("rest")}" min="0" max="100"> <output id="${id("rest-o")}"></output></label>` : ""}
     <div class="checks">
@@ -103,6 +113,13 @@ const cards = TRACKS.map((T, t) => {
   opts(q("mode"), T.modes, T.d.mode);
   if (T.rhythms) opts(q("rhy"), RHYTHMS, T.d.rhy);
   opts(q("mult"), MULTS, T.d.mult);
+  opts(q("dmsrc"), DMSHAPES, 0);
+  opts(q("dmrate"), DMRATES, 3);
+  const dmOn = () => { const on = +q("dmsrc").value > 0; q("dmrate").disabled = !on; q("dmdepth").disabled = !on; };
+  q("dmsrc").addEventListener("change", (e) => { gset(gtk(t, GK.DMSRC), +e.target.value); dmOn(); });
+  q("dmrate").addEventListener("change", (e) => gset(gtk(t, GK.DMRATE), +e.target.value));
+  q("dmdepth").addEventListener("input", (e) => { q("dmdepth-o").textContent = e.target.value; gset(gtk(t, GK.DMDEPTH), +e.target.value); });
+  dmOn();
   opts(q("len"), Array.from({ length: 16 }, (_, i) => `${i + 1} step${i ? "s" : ""}`), 15);
   const stepsEl = q("steps");
   q("len").addEventListener("change", (e) => {
@@ -129,7 +146,7 @@ const cards = TRACKS.map((T, t) => {
   q("lock").addEventListener("change", (e) => { gset(gtk(t, GK.LOCK), e.target.checked ? 1 : 0); q("mult").disabled = e.target.checked; });
   q("freeze").addEventListener("change", (e) => { gset(gtk(t, GK.FREEZE), e.target.checked ? 1 : 0); c.classList.toggle("frozen", e.target.checked); });
   q("mute").addEventListener("change", (e) => gset(gtk(t, GK.MUTE), e.target.checked ? 1 : 0));
-  return { el: c, cur: q("cur"), steps: [...q("steps").children], lastStep: -1 };
+  return { el: c, cur: q("cur"), steps: [...q("steps").children], lastStep: -1, dnow: q("dnow"), dnowO: q("dnow-o") };
 });
 
 // chord names from the scale: degree d's triad
@@ -172,6 +189,9 @@ function drawGen(g) {
     if (c.lastStep >= 0) c.steps[c.lastStep].classList.remove("on");
     c.lastStep = genPlaying ? s.step[t] % 16 : -1;
     if (c.lastStep >= 0) c.steps[c.lastStep].classList.add("on");
+    const dn = g.length > 36 ? g[33 + t] : null;
+    c.dnow.style.width = genPlaying && dn !== null ? dn + "%" : "0";
+    c.dnowO.textContent = genPlaying && dn !== null ? `density now ${dn}` : "–";
   });
 }
 

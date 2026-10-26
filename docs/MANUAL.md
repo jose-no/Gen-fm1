@@ -78,6 +78,9 @@ Every track has these:
 | Octave | Shift the track up or down by up to two octaves |
 | Output | Synth + MIDI, Synth only, or MIDI only |
 | Density | How busy the track is |
+| Density mod | Moves the density over time: Off, Sine, Triangle, Ramp up, Ramp down, Square, Random (a new value each period) or Drift (random, gliding between values) |
+| Mod rate | How long one cycle of the density mod takes, ¼ bar to 32 bars, in time with the music |
+| Mod depth | How far the mod moves the density, −100 to +100. Negative values turn the shape upside down. The meter shows the density in use right now |
 | Freeze | Stop writing this track: its current bar loops as it is, through chord changes too |
 | Mute | Silence the track; it keeps running underneath |
 
@@ -133,6 +136,7 @@ Incoming MIDI plays the tracks as it does in Felucca. MIDI in modes that steer t
 ## Tips
 
 - **Slow harmony, busy parts:** set the master rate to 4 or 8 bars, raise the melody's density, and set dyad B to ×½ so it moves twice as often as the master.
+- **Breathing parts:** give the melody a Sine density mod over 8 bars and the dyads a Square over 4, so the parts take turns being busy.
 - **Shifting patterns:** give the melody 5 or 7 steps and the bass 12, so the parts line up differently every bar.
 - **A phrase that evolves:** keep mutation around 10. Freeze the melody when you hear a phrase you like.
 - **Ambient drone:** choose Pedal, set the master rate to 16 bars, give both dyads Sustain with low density, and turn the melody's rests up.

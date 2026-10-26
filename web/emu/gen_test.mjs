@@ -11,7 +11,7 @@ let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
              PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15 };
 const tk = (t, k) => 16 + t * 16 + k;
 
 async function device() {
@@ -158,6 +158,34 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
   const mel = c.midi.filter((e) => e.st === 0x93);
   const win = (k) => mel.filter((e) => e.f >= t0 + k * 5 * step && e.f < t0 + (k + 1) * 5 * step).map((e) => `${Math.round((e.f - t0 - k * 5 * step) / step)}:${e.n}`).join(",");
   check(`frozen 5-step melody repeats every 5 steps (${win(0)})`, win(0).length > 0 && win(0) === win(1) && win(1) === win(2));
+}
+
+// DENSITY's modulation: a square over 2 bars, depth 100: the melody busy in the first bar, sparse in the second
+{
+  const e = await device();
+  e.render(1200);
+  e.ex.web_gen(GP.BPM, 120);
+  e.ex.web_gen(GP.ON, 1);
+  e.ex.web_gen(tk(3, GK.REST), 0);
+  e.ex.web_gen(tk(3, GK.DMSRC), 5);                          // square
+  e.ex.web_gen(tk(3, GK.DMRATE), 3);                         // 2 bars
+  e.ex.web_gen(tk(3, GK.DMDEPTH), 100);
+  e.ex.web_gen(GP.PLAY, 1);
+  const seen = new Set();
+  for (let k = 0; k < 64; k++) { e.render(250); seen.add(new Uint8Array(e.mem.buffer, e.ex.web_gen_info(), 37)[36]); }
+  const bar = 88200, mel = e.midi.filter((x) => x.st === 0x93), first = mel[0] ? mel[0].f : 0;
+  let hi = 0, lo = 0;
+  for (const x of mel) ((Math.floor((x.f - first + 2000) / bar) % 2) ? lo++ : hi++);
+  check(`density square 2 bars, depth 100: ${hi} melody notes in the busy bars, ${lo} in the sparse ones; density read back ${[...seen].sort((a, b) => a - b)}`,
+        hi > 3 * lo && seen.has(100) && seen.has(0));
+  // every shape keeps density within 0..100 and is the same twice
+  let ok = true;
+  for (let src = 1; src < 8; src++) {
+    e.ex.web_gen(tk(3, GK.DMSRC), src);
+    e.ex.web_gen(tk(3, GK.DMRATE), 0);
+    for (let k = 0; k < 8; k++) { e.render(60); const d = new Uint8Array(e.mem.buffer, e.ex.web_gen_info(), 37)[36]; if (d > 100) ok = false; }
+  }
+  check("every modulation shape keeps density within 0..100", ok);
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");
