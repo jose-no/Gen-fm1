@@ -15,7 +15,7 @@
  * stops a track's writing altogether, so its pattern loops as it stands.
  * Generated notes go to the track's synth, to USB MIDI OUT on the track's channel (trk_midi_ch), or both. */
 
-#define GEN_STEPS 16u                    /* a track's pattern: one bar of 1/16 */
+#define GEN_STEPS 16u                    /* the longest pattern: one bar of 1/16 (LEN 1..16 per track) */
 #define GEN_LOOP_MAX 16u                 /* chords in the progression loop (PENDULUM doubles it) */
 
 enum { GS_FIXED, GS_WALK, GS_MARKOV, GS_FUNC, GS_CIRCLE, GS_VLEAD, GS_PEND, GS_PEDAL, GS_COUNT };
@@ -34,7 +34,7 @@ enum {
     GP_TRK = 16
 };
 enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,
-       GK_N = 16 };
+       GK_LEN, GK_N = 16 };
 
 /* the master rate: steps (1/16) per chord, 1/2 bar .. 32 bars, odd lengths too */
 static const uint16_t GEN_RATE[] = {8, 16, 32, 48, 64, 80, 96, 112, 128, 192, 256, 384, 512};
@@ -75,6 +75,7 @@ typedef struct {
 typedef struct {
     uint8_t mult, lock, freeze, out, mode, rhy, dens, leap, rest, patch, mute;
     int8_t oct;
+    uint8_t len;         /* steps in the pattern, 1..16 (the tracks may differ: polymeter) */
 } gen_trk_t;
 
 static struct {
@@ -235,6 +236,15 @@ static uint32_t gen_chord_at(uint32_t ti, uint32_t s, uint32_t *change)
 }
 
 /* --------------------------------------------------------------------- writing --- */
+static uint32_t gen_len(uint32_t ti) { uint32_t n = gen.tk[ti].len; return n < 1u ? 1u : n > GEN_STEPS ? GEN_STEPS : n; }
+static uint32_t gen_idx;                 /* the pattern step being written (gen_write) */
+/* the step of track ti's pattern that plays at step s: from where its sequencer is now */
+static uint32_t gen_idx_at(uint32_t ti, uint32_t s)
+{
+    uint32_t n = gen_len(ti);
+    int32_t d = (int32_t)s - (int32_t)gen.pos[ti];
+    return (uint32_t)(((int32_t)(trk[ti].seq_idx % n) + d % (int32_t)n + 2 * (int32_t)n) % (int32_t)n);
+}
 static void gen_put(step_t *st, const int32_t *notes, uint32_t n, uint32_t time, uint32_t vel)
 {
     uint32_t i;
@@ -249,10 +259,10 @@ static void gen_put(step_t *st, const int32_t *notes, uint32_t n, uint32_t time,
 }
 
 /* a dyad track's hits (1 = a new chord here, 0 = no new notes: a tie or a rest, *tie says which) */
-static uint32_t gen_dyad_hit(uint32_t ti, uint32_t s, uint32_t *tie)
+static uint32_t gen_dyad_hit(uint32_t ti, uint32_t s, uint32_t idx, uint32_t *tie)
 {
     const gen_trk_t *k = &gen.tk[ti];
-    uint32_t idx = s % GEN_STEPS, change, d = k->dens, hit;
+    uint32_t change, d = k->dens, hit, n = gen_len(ti);
     const gen_dec_t *dc = &gen.dec[ti][idx];
     (void)gen_chord_at(ti, s, &change);
     *tie = 0;
@@ -272,8 +282,8 @@ static uint32_t gen_dyad_hit(uint32_t ti, uint32_t s, uint32_t *tie)
         break;
     }
     default: {                           /* EUCLID: k of 16, rotated by the track */
-        uint32_t kk = 1u + d * 15u / 100u, i = (idx + 16u - ti * 2u) % 16u;
-        hit = change || (i * kk) % 16u < kk;
+        uint32_t kk = 1u + d * (n - 1u) / 100u, i = (idx + 2u * n - ti * 2u) % n;
+        hit = change || (i * kk) % n < kk;
         break;
     }
     }
@@ -319,18 +329,18 @@ static void gen_dyad_degs(uint32_t ti, int32_t c, uint32_t r, int32_t *a, int32_
 static void gen_write_dyad(track_t *t, uint32_t ti, uint32_t s)
 {
     gen_trk_t *k = &gen.tk[ti];
-    uint32_t idx = s % GEN_STEPS, tie, hit, r = gen.dec[ti][idx].r;
+    uint32_t idx = gen_idx, tie, hit, r = gen.dec[ti][idx].r;
     int32_t c = gen.loop[gen_chord_at(ti, s, 0)], a, b, oct = 4 + k->oct, nn[2];
     step_t *st = &t->step[idx];
     if (gen.combine == GC_MERGE && ti == GT_DYAD_B) {          /* B moves with A */
-        hit = gen_dyad_hit(GT_DYAD_A, s, &tie);
+        hit = gen_dyad_hit(GT_DYAD_A, s, gen_idx_at(GT_DYAD_A, s), &tie);
         c = gen.loop[gen_chord_at(GT_DYAD_A, s, 0)];
     } else if (gen.combine == GC_CALL && ti == GT_DYAD_B) {    /* B answers: plays where A does not */
-        uint32_t ta, ha = gen_dyad_hit(GT_DYAD_A, s, &ta), tb;
-        hit = !ha && !ta && gen_dyad_hit(ti, s, &tb);
+        uint32_t ta, ha = gen_dyad_hit(GT_DYAD_A, s, gen_idx_at(GT_DYAD_A, s), &ta), tb;
+        hit = !ha && !ta && gen_dyad_hit(ti, s, idx, &tb);
         tie = 0;
     } else {
-        hit = gen_dyad_hit(ti, s, &tie);
+        hit = gen_dyad_hit(ti, s, idx, &tie);
     }
     if (!hit) {
         gen_put(st, 0, 0, tie || k->rhy == GY_SUST ? ST_TIE : ST_REST, 0);
@@ -356,11 +366,12 @@ static void gen_write_dyad(track_t *t, uint32_t ti, uint32_t s)
 static void gen_write_bass(track_t *t, uint32_t s)
 {
     gen_trk_t *k = &gen.tk[GT_BASS];
-    uint32_t idx = s % GEN_STEPS, change, r = gen.dec[GT_BASS][idx].r, ci = gen_chord_at(GT_BASS, s, &change);
-    uint32_t kk = 2u + k->dens * 10u / 100u, i = idx, hit, p;
+    uint32_t idx = gen_idx, change, r = gen.dec[GT_BASS][idx].r, ci = gen_chord_at(GT_BASS, s, &change);
+    uint32_t n = gen_len(GT_BASS), kk = (2u + k->dens * 10u / 100u) * n / 16u, i = idx, hit, p;
     int32_t c = gen.src == GS_PEDAL ? 0 : gen.loop[ci], d = c, oct = 2 + k->oct, x;
     step_t *st = &t->step[idx];
-    hit = change || idx == 0u || (i * kk) % 16u < kk;
+    kk = kk ? kk : 1u;
+    hit = change || idx == 0u || (i * kk) % n < kk;
     if (!change && (r % 100u) < gen.mut / 4u)
         hit = !hit;
     if (!hit) {
@@ -406,7 +417,7 @@ static int32_t gen_mel_deg(int32_t c, int32_t off, uint32_t pool, uint32_t stron
 static void gen_write_mel(track_t *t, uint32_t s)
 {
     gen_trk_t *k = &gen.tk[GT_MEL];
-    uint32_t idx = s % GEN_STEPS, change;
+    uint32_t idx = gen_idx, change;
     gen_dec_t *dc = &gen.dec[GT_MEL][idx];
     int32_t c = gen.loop[gen_chord_at(GT_MEL, s, &change)], x;
     uint32_t r = dc->r, strong = idx % 4u == 0u, dens = k->dens + (strong ? 20u : 0u);
@@ -426,7 +437,7 @@ static void gen_draw(uint32_t ti, uint32_t idx)
     gen_dec_t *dc = &gen.dec[ti][idx];
     dc->r = gen_rnd();
     if (ti == GT_MEL) {
-        const gen_dec_t *pv = &gen.dec[ti][(idx + GEN_STEPS - 1u) % GEN_STEPS];
+        const gen_dec_t *pv = &gen.dec[ti][(idx + gen_len(ti) - 1u) % gen_len(ti)];
         int32_t o = pv->ok ? pv->off : 3, mv;
         uint32_t r = gen_rnd();
         if (r % 100u < gen.tk[ti].leap)
@@ -443,11 +454,11 @@ static void gen_draw(uint32_t ti, uint32_t idx)
     dc->ok = 1;
 }
 
-/* step s of track ti into its pattern */
-static void gen_write(track_t *t, uint32_t ti, uint32_t s)
+/* step s of track ti into step idx of its pattern */
+static void gen_write(track_t *t, uint32_t ti, uint32_t s, uint32_t idx)
 {
-    uint32_t idx = s % GEN_STEPS;
     gen_dec_t *dc = &gen.dec[ti][idx];
+    gen_idx = idx;
     if (gen.tk[ti].freeze)
         return;
     if (!dc->ok || gen_pct(gen.mut))
@@ -486,23 +497,29 @@ static void gen_pass(uint32_t s)
  * step ahead for ties), and at the top this one too */
 static void gen_on_step(track_t *t, uint32_t top, uint32_t len)
 {
-    uint32_t ti = (uint32_t)(t - trk), s;
-    (void)len;
+    uint32_t ti = (uint32_t)(t - trk), s, idx = t->seq_idx;
     if (!gen.on || ti >= NPART)
         return;
+    len = len ? len : 1u;
     if (top) {
         gen.pos[ti] = 0;
         if (ti == 0u) {
             gen.pass = 0;
             gen_pass(0);
         }
-        gen_write(t, ti, 0);
     } else {
         gen.pos[ti]++;
     }
     s = gen.pos[ti];
-    gen_pass(s + 1u);
-    gen_write(t, ti, s + 1u);
+    if (len == 1u) {                     /* one step: it is this one and the next (written now, as it plays) */
+        gen_pass(s);
+        gen_write(t, ti, s, 0);
+    } else {
+        if (top)
+            gen_write(t, ti, s, idx % len);
+        gen_pass(s + 1u);
+        gen_write(t, ti, s + 1u, (idx + 1u) % len);
+    }
     gen.cur_t[ti] = (uint8_t)gen_chord_at(ti, s, 0);
     if (ti == 0u)
         gen.cur_m = (uint8_t)((s / gen_master_period()) % (gen.llen ? gen.llen : 1u));
@@ -556,11 +573,11 @@ static void gen_note_off(track_t *t, uint32_t note)
 static void gen_defaults(void)
 {
     static const gen_trk_t D[NPART] = {
-        /* mult lock frz out mode     rhy      dens leap rest patch mute oct */
-        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0},      /* dyad A: TINE EP */
-        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0},    /* dyad B: PAD, x2 */
-        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0},             /* bass: FM BASS, locked */
-        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0},         /* melody: PLUCK */
+        /* mult lock frz out mode     rhy      dens leap rest patch mute oct len */
+        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0, 16},      /* dyad A: TINE EP */
+        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0, 16},    /* dyad B: PAD, x2 */
+        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0, 16},             /* bass: FM BASS, locked */
+        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0, 16},         /* melody: PLUCK */
     };
     uint32_t i;
     gen.root = 0;

@@ -15,10 +15,10 @@ Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuros
 - **Harmony:** pick a key and a scale (16 built in, or your own), and a progression source: fixed, random walk, weighted rules, functional harmony, circle of fifths, voice-leading, pendulum, or pedal. The progression is a loop of 2 to 8 chords.
 - **Chord timing:** a master rate from ½ bar to 32 bars. Each track walks the progression at the master rate times its own multiplier (×¼ to ×8), or follows the master chord exactly with harmony lock.
 - **Mutation:** one control for how much the patterns and progression change from pass to pass. At 0 every track repeats its bar, re-voiced onto each new chord. Freeze stops a track changing at all.
-- **Per track:** FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
+- **Per track:** pattern length (1–16 steps, so tracks can run in different lengths), FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
 - **MIDI out:** each track sends its notes on its own channel (tracks 1–4 on channels 1–4).
 
-The generator writes each track's 16-step pattern one step ahead of the playhead, so Felucca's own sequencer plays the notes and the SEQ screen shows the pattern as it is written.
+The generator writes each track's pattern one step ahead of the playhead, so Felucca's own sequencer plays the notes and the SEQ screen shows the pattern as it is written.
 
 See [docs/MANUAL.md](docs/MANUAL.md) for every control.
 

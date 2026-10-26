@@ -11,7 +11,7 @@ let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
              PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12 };
 const tk = (t, k) => 16 + t * 16 + k;
 
 async function device() {
@@ -130,6 +130,35 @@ b.render(6000);
 const pen = new Set([0, 2, 4, 7, 9]);
 const bon = b.midi.filter((e) => (e.st & 0xf0) === 0x90);
 check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 && bon.every((e) => pen.has(e.n % 12)));
+
+// LEN: each track its own length (polymeter); a frozen 5-step melody repeats every 5 steps; 1 step works
+{
+  const c = await device();
+  c.render(1200);
+  c.ex.web_gen(GP.BPM, 120);
+  c.ex.web_gen(GP.ON, 1);
+  c.ex.web_gen(tk(0, GK.LEN), 1);
+  c.ex.web_gen(tk(1, GK.LEN), 12);
+  c.ex.web_gen(tk(2, GK.LEN), 7);
+  c.ex.web_gen(tk(3, GK.LEN), 5);
+  c.ex.web_gen(tk(3, GK.DENS), 90);
+  c.ex.web_gen(tk(3, GK.REST), 0);
+  c.ex.web_gen(GP.PLAY, 1);
+  c.render(4000);
+  const on = c.midi.filter((e) => (e.st & 0xf0) === 0x90);
+  check(`LEN 1 / 12 / 7 / 5: all four tracks play (${[0, 1, 2, 3].map((ch) => on.filter((e) => (e.st & 15) === ch).length)} notes), all in C major`,
+        [0, 1, 2, 3].every((ch) => on.some((e) => (e.st & 15) === ch)) && on.every((e) => MAJ.has(e.n % 12)));
+  c.ex.web_gen(GP.MUT, 0);
+  c.ex.web_gen(tk(3, GK.FREEZE), 1);
+  c.ex.web_gen(GP.RATE, 12);
+  c.render(3000);
+  c.midi.length = 0;
+  c.render(3000);
+  const step = 44100 * 60 / 120 / 4, t0 = c.midi[0].f;
+  const mel = c.midi.filter((e) => e.st === 0x93);
+  const win = (k) => mel.filter((e) => e.f >= t0 + k * 5 * step && e.f < t0 + (k + 1) * 5 * step).map((e) => `${Math.round((e.f - t0 - k * 5 * step) / step)}:${e.n}`).join(",");
+  check(`frozen 5-step melody repeats every 5 steps (${win(0)})`, win(0).length > 0 && win(0) === win(1) && win(1) === win(2));
+}
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");
 process.exit(fails ? 1 : 0);

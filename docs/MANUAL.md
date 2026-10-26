@@ -72,6 +72,7 @@ Every track has these:
 | Control | What it does |
 | --- | --- |
 | Sound | The FM patch: Tine EP, Bell, FM Bass, Brass, Pad, Marimba, Organ or Pluck |
+| Length | How many steps the track's pattern has, 1 to 16 sixteenth notes. Tracks of different lengths drift against each other (polymeter); the chords still change in bars |
 | Chord rate | The track's multiplier of the master rate: ×¼, ×½, ×1, ×2, ×3, ×4 or ×8 |
 | Harmony lock | Follow the master chord exactly; the chord rate is ignored |
 | Octave | Shift the track up or down by up to two octaves |
@@ -80,7 +81,7 @@ Every track has these:
 | Freeze | Stop writing this track: its current bar loops as it is, through chord changes too |
 | Mute | Silence the track; it keeps running underneath |
 
-The card header shows the track's MIDI channel and the chord it is playing now. The strip under it shows which of the 16 steps is playing.
+The card header shows the track's MIDI channel and the chord it is playing now. The strip under it shows which step of the pattern is playing.
 
 ### Dyad A and Dyad B
 
@@ -132,6 +133,7 @@ Incoming MIDI plays the tracks as it does in Felucca. MIDI in modes that steer t
 ## Tips
 
 - **Slow harmony, busy parts:** set the master rate to 4 or 8 bars, raise the melody's density, and set dyad B to ×½ so it moves twice as often as the master.
+- **Shifting patterns:** give the melody 5 or 7 steps and the bass 12, so the parts line up differently every bar.
 - **A phrase that evolves:** keep mutation around 10. Freeze the melody when you hear a phrase you like.
 - **Ambient drone:** choose Pedal, set the master rate to 16 bars, give both dyads Sustain with low density, and turn the melody's rests up.
 - **Drive other gear:** set every track's output to MIDI only and connect the FM-1 (or the web page's Send to) to your synths.

@@ -2,7 +2,7 @@
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 16 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), its MIDI OUT as it happens (web_midi_out).
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12 };
 const gtk = (t, k) => 16 + t * 16 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
 const $ = (id) => document.getElementById(id);
@@ -84,6 +84,7 @@ const cards = TRACKS.map((T, t) => {
       <label>Sound <select id="${id("patch")}"></select></label>
       <label>${T.melody ? "Note pool" : T.rhythms ? "Interval" : "Pattern"} <select id="${id("mode")}"></select></label>
       ${T.rhythms ? `<label>Rhythm <select id="${id("rhy")}"></select></label>` : ""}
+      <label>Length <select id="${id("len")}"></select></label>
       <label>Chord rate <select id="${id("mult")}"></select></label>
       <label>Octave <select id="${id("oct")}"><option value="-2">−2</option><option value="-1">−1</option><option value="0">0</option><option value="1">+1</option><option value="2">+2</option></select></label>
       <label>Output <select id="${id("out")}"></select></label>
@@ -102,6 +103,14 @@ const cards = TRACKS.map((T, t) => {
   opts(q("mode"), T.modes, T.d.mode);
   if (T.rhythms) opts(q("rhy"), RHYTHMS, T.d.rhy);
   opts(q("mult"), MULTS, T.d.mult);
+  opts(q("len"), Array.from({ length: 16 }, (_, i) => `${i + 1} step${i ? "s" : ""}`), 15);
+  const stepsEl = q("steps");
+  q("len").addEventListener("change", (e) => {
+    const n = +e.target.value + 1;
+    gset(gtk(t, GK.LEN), n);
+    [...stepsEl.children].forEach((x, i) => { x.hidden = i >= n; });
+    stepsEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+  });
   opts(q("out"), OUTS, 0);
   q("oct").value = "0";
   q("lock").checked = !!T.d.lock;

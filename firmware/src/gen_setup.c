@@ -17,7 +17,7 @@ static void gen_track_setup(uint32_t ti)
     track_t *t = &trk[ti];
     uint32_t i;
     gen_track_sound(ti);
-    t->p[P_SLEN] = GEN_STEPS;
+    t->p[P_SLEN] = (int16_t)gen_len(ti);
     t->p[P_SDIV] = 2;                    /* 1/16 */
     t->p[P_SGATE] = ti < GT_BASS ? 120 : ti == GT_BASS ? 96 : 100;
     t->p[P_QUANT] = QN_OFF;
@@ -73,6 +73,11 @@ static void gen_set(uint32_t id, int32_t v)
                 gen_track_sound(ti);
             break;
         case GK_MUTE: g->mute = (uint8_t)(v != 0); break;
+        case GK_LEN:
+            g->len = (uint8_t)gen_lim(v, 1, GEN_STEPS);
+            if (gen.on)
+                trk[ti].p[P_SLEN] = (int16_t)g->len;
+            break;
         default: break;
         }
         return;
