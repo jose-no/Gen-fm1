@@ -1,43 +1,82 @@
-# Felucca
+# Gen-FM1
 
-[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+A generative chord and melody machine for the M-VAVE FM-1 pocket synthesizer: four tracks, each with its own 6-operator FM synth and its own USB MIDI channel, driven by one shared harmony engine.
 
-## Maintenance Notice
+- **Dyad A and Dyad B:** two-note chord tracks.
+- **Bass:** a mono bass line that follows the chords.
+- **Melody:** a mono melody built from chord and scale tones.
 
-What began as a personal experiment grew far beyond my expectations. I’m grateful to everyone who contributed, supported the project, and made music with Felucca.
+Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments). Felucca supplies the hardware layer, the FM engine, the sequencer, the screen and the browser emulator. Gen-FM1 adds the generator on top.
 
-I’ve decided to step back from active development to focus on creating new instruments and music.
+> **Status: proof of concept.** The generator runs in the browser emulator and passes its tests. It has not been flashed to a real FM-1 yet, and it has no controls on the FM-1's own screen yet: it is switched on and set from the web page.
 
-Felucca will remain available with occasional maintenance, but new features, issue responses, and pull request reviews are not guaranteed.
+## What it does
 
-Thank you for everything. I hope you’ll look forward to my next creations.
+- **Harmony:** pick a key and a scale (16 built in, or your own), and a progression source: fixed, random walk, weighted rules, functional harmony, circle of fifths, voice-leading, pendulum, or pedal. The progression is a loop of 2 to 8 chords.
+- **Chord timing:** a master rate from ½ bar to 32 bars. Each track walks the progression at the master rate times its own multiplier (×¼ to ×8), or follows the master chord exactly with harmony lock.
+- **Mutation:** one control for how much the patterns and progression change from pass to pass. At 0 every track repeats its bar, re-voiced onto each new chord. Freeze stops a track changing at all.
+- **Per track:** FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
+- **MIDI out:** each track sends its notes on its own channel (tracks 1–4 on channels 1–4).
 
-## Overview
+The generator writes each track's 16-step pattern one step ahead of the playhead, so Felucca's own sequencer plays the notes and the SEQ screen shows the pattern as it is written.
 
-Multi-engine synthesizer firmware for the M-VAVE FM-1, version 1.6.1. Connect the FM-1 to a computer by USB, open the
-[web installer](https://hugelton.github.io/Felucca/) in Chrome or Edge and press Install; no extra hardware is needed.
-Installing is at your own risk: M-VAVE's updater or the installer's **Return to official V15** takes you back.
-[Try it in your browser](https://hugelton.github.io/Felucca/webapp/try/), no FM-1 needed.
+See [docs/MANUAL.md](docs/MANUAL.md) for every control.
 
-- Install: [web installer](https://hugelton.github.io/Felucca/)
-- Edit: [web editor](https://hugelton.github.io/Felucca/webapp/editor/) ([Felucca-WebApp](https://github.com/hugelton/Felucca-WebApp))
-- Read: the manual and the release notes are in the [wiki](https://github.com/hugelton/Felucca/wiki/Home)
-- Build: [BUILDING.md](BUILDING.md)
-- Related: [Felucca-Engines](https://github.com/hugelton/Felucca-Engines) (the ANALOG, LOFI, TRIO, WHEEL and NOISE engines, MIT; still maintained) ·
-  [felucca-bsp](https://github.com/hugelton/felucca-bsp) (the FM-1 hardware layer)
+## Try it in the browser
 
-## AI disclaimer
+The browser build is the FM-1 firmware compiled to WebAssembly, running against a simulated FM-1. Build and serve it locally:
 
-Felucca is developed with the assistance of AI coding agents (code, tests, documentation, translation, maintenance). The
-design, features, sound design and direction are the maintainer's or the community's, and no generative AI is used for music,
-icons or artwork. See [On AI-Assisted Development and Responsibility](https://github.com/hugelton/Felucca/discussions/166).
+```sh
+git clone --recurse-submodules https://github.com/jose-no/Gen-fm1.git
+cd Gen-fm1
+pip3 install Pillow fonttools ziglang
+tools/gen_headers.sh               # generated tables, fonts and samples -> build/gen
+tools/emu_build_zig.sh             # the firmware -> build/emu/felucca.wasm
+python3 web/emu/make_gen_page.py   # the page -> build/genemu/
+cd build/genemu && python3 -m http.server 8000
+```
+
+Then open http://localhost:8000 in Chrome, Edge, Firefox or Safari, press **Switch on**, turn the generator **On** and press **Play**.
+
+## Tests
+
+```sh
+node web/emu/gen_test.mjs build/emu/felucca.wasm   # the generator
+node web/emu/emu_test.mjs build/emu/felucca.wasm   # Felucca's own emulator checks
+```
+
+The generator test checks that it sounds, that every note stays in the scale, that MIDI note-ons and note-offs pair up on channels 1–4, that track multipliers and harmony lock change chords at the right times, that freeze with mutation at 0 repeats the bar, that every progression source makes a valid loop, and that the same settings always give the same audio.
+
+## Building for the FM-1
+
+The firmware builds the same way as Felucca. It needs the JieLi toolchain and three files from JieLi's AC79 SDK; see [BUILDING.md](BUILDING.md). Installing other firmware on the FM-1 is at your own risk. Felucca's web installer can put M-VAVE's firmware back.
+
+## Where the code is
+
+| File | What |
+| --- | --- |
+| `firmware/src/gen.c` | The generator: harmony engine, progression sources, the four track generators, MIDI out |
+| `firmware/src/gen_setup.c` | Switching it on and changing settings |
+| `firmware/src/seq.c` | Felucca's sequencer, with three small hooks into the generator |
+| `web/emu/gen_panel.*` | The generator's controls on the web page |
+| `web/emu/make_gen_page.py` | Builds the test page from Felucca's emulator page |
+| `web/emu/gen_test.mjs` | The generator's tests |
+| `tools/emu_build_zig.sh` | Builds the browser version with Zig (no Emscripten needed) |
+
+## Planned
+
+- Controls on the FM-1's own screen and knobs
+- Modulation of the chord rate (LFO, random, rate sequences, probability, MIDI CC)
+- Scala (.scl) scale import and microtonal tuning
+- MIDI in modes: play a track, transpose the generator, or reseed it
+- More progression sources: borrowed chords, melody-led, MIDI-led, and a blend of two
 
 ## Credits and licence
 
-Free software: [GPL-3.0-only](LICENSE); the Hügelton Sample Pack is CC0 1.0; the engines in `firmware/engines` are MIT
-([Felucca-Engines](https://github.com/hugelton/Felucca-Engines)); the bundled fonts and ported DSP keep their own licences
-([LICENSES/](LICENSES/), [LICENSING.md](LICENSING.md)). Thanks to everyone whose work and contributions are in it: [CREDITS.md](CREDITS.md).
+Gen-FM1 is free software under [GPL-3.0-only](LICENSE), as Felucca is.
 
-M-VAVE and FM-1 are trademarks of their respective owners. Felucca is not affiliated with or endorsed by them.
+- **Felucca** by Leo Kuroshita (@kurogedelic), Hügelton Instruments: the firmware this builds on. Its own README is kept in [docs/FELUCCA_README.md](docs/FELUCCA_README.md), and its credits in [CREDITS.md](CREDITS.md) and [LICENSING.md](LICENSING.md).
+- **X0X** by charlesvestal: the design of the browser build that Felucca's emulator follows.
+- The 6-operator FM engine is msfa, Dexed's core (Apache-2.0); the engines in `firmware/engines` are MIT ([Felucca-Engines](https://github.com/hugelton/Felucca-Engines)).
 
-Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+M-VAVE and FM-1 are trademarks of their respective owners. Gen-FM1 is not affiliated with or endorsed by M-VAVE or Hügelton Instruments.
