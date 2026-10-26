@@ -167,6 +167,7 @@ static void lcd_init(void) {}
 #include "../../firmware/src/ui_menu.c"
 #include "../../firmware/src/ui_input.c"
 #include "../../firmware/src/ui_layer.c"
+#include "../../firmware/src/gen_setup.c"     /* the generative machine's settings */
 
 /* ------------------------------------------------------------ the flash --- */
 static uint32_t web_flash_writes;
@@ -497,3 +498,35 @@ EXPORT uint32_t web_screen_draws(void) { return web_draws; }
 EXPORT uint32_t web_now_ms(void) { return fm1_ms; }
 EXPORT uint32_t web_playing(void) { return song.playing; }
 EXPORT uint32_t web_sample_rate(void) { return FS; }
+
+/* ------------------------------------------------- the generative machine --- */
+EXPORT void web_gen(uint32_t id, int32_t v) { gen_set(id, v); }
+static uint8_t web_gen_buf[64];
+/* {on, playing, root, scale, src, llen, cur_m, cur_t[4], mask lo, mask hi, step[4], loop[16]} */
+EXPORT uint8_t *web_gen_info(void)
+{
+    uint32_t i, m = gen.llen ? gen_mask() : 0xAB5u;
+    uint8_t *b = web_gen_buf;
+    b[0] = gen.on;
+    b[1] = (uint8_t)song.playing;
+    b[2] = gen.root;
+    b[3] = gen.scale;
+    b[4] = gen.src;
+    b[5] = gen.llen;
+    b[6] = gen.cur_m;
+    for (i = 0; i < 4u; i++)
+        b[7 + i] = gen.cur_t[i];
+    b[11] = (uint8_t)(m & 0xFFu);
+    b[12] = (uint8_t)(m >> 8);
+    for (i = 0; i < 4u; i++)
+        b[13 + i] = (uint8_t)trk[i].seq_idx;
+    for (i = 0; i < GEN_LOOP_MAX; i++)
+        b[17 + i] = (uint8_t)gen.loop[i];
+    return b;
+}
+/* a USB-MIDI event packet the generator sent (MIDI OUT), 0: none */
+EXPORT uint32_t web_midi_out(void)
+{
+    return gen_web_mo_r == gen_web_mo_w ? 0u : gen_web_mo[gen_web_mo_r++ % 256u];
+}
+

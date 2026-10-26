@@ -93,6 +93,7 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
+      else if (m.type === "gen" && ex.web_gen) ex.web_gen(m.id | 0, m.v | 0);   // the generative machine (gen.c)
     }
 
     publish() {
@@ -124,7 +125,11 @@ if (typeof registerProcessor === "function") {
         this.sentWrites = writes;
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
-      if (msg.leds || msg.fb || msg.sectors || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (ex.web_gen_info) {                          // the generative machine's state, when it changes
+        const g = new Uint8Array(mem, ex.web_gen_info(), 33).slice(), key = g.join(",");
+        if (key !== this.sentGen) { this.sentGen = key; msg.gen = g; }
+      }
+      if (msg.leds || msg.fb || msg.sectors || msg.gen || msg.load !== undefined) this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than
@@ -151,6 +156,11 @@ if (typeof registerProcessor === "function") {
       this.frames += n;
       out[0].set(new Float32Array(ex.memory.buffer, ex.web_out_l(), n));
       if (out[1]) out[1].set(new Float32Array(ex.memory.buffer, ex.web_out_r(), n));
+      if (ex.web_midi_out) {                          // MIDI OUT from the generator, as it happens
+        let midi = null;
+        for (let p; (p = ex.web_midi_out()) !== 0;) (midi || (midi = [])).push([(p >>> 8) & 255, (p >>> 16) & 127, (p >>> 24) & 127]);
+        if (midi) this.port.postMessage({ type: "midi", events: midi });
+      }
       if (currentTime - this.lastFrame >= this.period) {
         this.lastFrame = currentTime;
         this.publish();

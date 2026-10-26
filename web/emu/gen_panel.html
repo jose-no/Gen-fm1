@@ -1,0 +1,40 @@
+<section class="gen" id="gen" aria-labelledby="genhead">
+  <div class="gen-top">
+    <h2 id="genhead">Generator</h2>
+    <button type="button" id="gen-on" class="pill" aria-pressed="false" disabled>Off</button>
+    <button type="button" id="gen-play" class="pill play" aria-pressed="false" disabled>Play</button>
+    <span class="hint" id="gen-hint">Switch the FM-1 on above, then turn the generator on.</span>
+  </div>
+
+  <div class="gen-row" role="group" aria-label="Harmony">
+    <label>Tempo <input type="number" id="g-bpm" min="40" max="240" value="120"> <span class="unit">BPM</span></label>
+    <label>Key <select id="g-root"></select></label>
+    <label>Scale <select id="g-scale"></select></label>
+    <label>Progression <select id="g-src"></select></label>
+    <label id="g-preset-l">Preset <select id="g-preset"></select></label>
+    <label>Chords <select id="g-plen"></select></label>
+    <label>Master rate <select id="g-rate"></select></label>
+    <label>Dyad B <select id="g-combine"><option value="0">Independent</option><option value="1">Merge with A</option><option value="2">Call and response</option></select></label>
+    <label class="wide">Mutation <input type="range" id="g-mut" min="0" max="100" value="20"> <output id="g-mut-o">20</output></label>
+    <button type="button" id="g-regen" class="pill small">New progression</button>
+  </div>
+
+  <div class="gen-row scale-edit" id="g-umask-row" hidden>
+    <span class="lbl">Custom scale</span>
+    <span id="g-umask" class="notes" role="group" aria-label="Notes in the custom scale"></span>
+  </div>
+
+  <div class="chords" aria-live="polite">
+    <div class="chords-head"><span class="lbl">Progression loop</span><span class="lbl" id="g-keyname"></span></div>
+    <div id="g-loop" class="loop"></div>
+    <div id="g-tracks-now" class="now"></div>
+  </div>
+
+  <div class="tracks" id="g-tracks"></div>
+
+  <div class="midi">
+    <span class="lbl">USB MIDI out</span>
+    <span id="g-midi" class="midi-log"></span>
+    <label id="g-out-l" hidden>Send to <select id="g-out"><option value="">None</option></select></label>
+  </div>
+</section>

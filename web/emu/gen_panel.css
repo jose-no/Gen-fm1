@@ -1,0 +1,63 @@
+/* the generative machine's panel: the FM-1's own materials (body, tray, cream LEDs), below the device */
+:root { --tk0: #e8c37a; --tk1: #9fc6e8; --tk2: #c9a0e0; --tk3: #8fd6a8; --warn: #f0a46a; }
+.gen { margin: 20px 0 0; padding: 18px; background: var(--body); color: var(--label); border-radius: 28px;
+       display: grid; gap: 16px; font-size: 13px; }
+.gen h2 { margin: 0; font: 600 15px/1.2 "DotGothic16", -apple-system, sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--lit); }
+.gen-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.gen .hint { color: #9a9a9e; font-size: 12px; min-width: 0; }
+.gen .lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #9a9a9e; }
+.gen-row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; padding: 12px 14px; background: var(--tray); border-radius: 14px; }
+.gen label { display: grid; gap: 3px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #9a9a9e; min-width: 0; }
+.gen label.wide { min-width: 180px; flex: 1 1 180px; }
+.gen label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; font-size: 12px; color: var(--label); }
+.gen select, .gen input[type=number] { font: 13px -apple-system, sans-serif; color: var(--label); background: var(--part); border: 1px solid var(--edge);
+       border-radius: 8px; padding: 5px 8px; max-width: 100%; }
+.gen input[type=number] { width: 4.5em; font-variant-numeric: tabular-nums; }
+.gen .unit { display: none; }
+.gen input[type=range] { width: 100%; accent-color: var(--lit); }
+.gen output { font-variant-numeric: tabular-nums; color: var(--label); font-size: 12px; text-transform: none; }
+.gen label.wide { grid-template-columns: 1fr auto; align-items: center; }
+.gen label.wide > :first-child { grid-column: 1 / -1; }
+.gen select:focus-visible, .gen input:focus-visible, .gen button:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
+.pill { font: 600 13px -apple-system, sans-serif; padding: 7px 16px; border-radius: 999px; border: 1px solid var(--edge);
+        background: var(--part); color: var(--label); cursor: pointer; }
+.pill:disabled { opacity: .4; cursor: not-allowed; }
+.pill[aria-pressed=true] { background: var(--lit); color: #1d1d1f; border-color: var(--lit); }
+.pill.play[aria-pressed=true] { background: var(--green); border-color: var(--green); color: #0d2414; }
+.pill.small { padding: 5px 12px; font-size: 12px; }
+.scale-edit { align-items: center; }
+.notes { display: flex; flex-wrap: wrap; gap: 4px; }
+.notes button { font: 600 12px -apple-system, sans-serif; width: 38px; padding: 6px 0; border-radius: 6px; border: 1px solid var(--edge);
+                background: var(--part); color: #9a9a9e; cursor: pointer; }
+.notes button[aria-pressed=true] { background: var(--lit); color: #1d1d1f; }
+.notes button.root { outline: 1px dashed var(--lit); outline-offset: 1px; }
+.chords { padding: 12px 14px; background: var(--tray); border-radius: 14px; display: grid; gap: 8px; }
+.chords-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.loop { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: grid; gap: 2px; min-width: 64px; padding: 8px 10px 6px; border-radius: 10px; background: var(--part); border: 1px solid var(--edge); }
+.chip b { font: 600 16px/1.1 -apple-system, sans-serif; color: var(--label); }
+.chip i { font: 12px/1.1 "DotGothic16", monospace; font-style: normal; color: #9a9a9e; }
+.chip.master { border-color: var(--lit); box-shadow: 0 0 0 1px var(--lit) inset; }
+.chip .who { display: flex; gap: 3px; min-height: 8px; }
+.chip .who span { width: 8px; height: 8px; border-radius: 50%; }
+.now { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #9a9a9e; }
+.now span b { color: var(--label); font-weight: 600; }
+.tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.trk { padding: 12px 14px; background: var(--tray); border-radius: 14px; display: grid; gap: 10px; align-content: start;
+       border-top: 3px solid var(--c); min-width: 0; }
+.trk header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.trk h3 { margin: 0; font: 600 14px -apple-system, sans-serif; color: var(--label); }
+.trk h3 small { font-weight: 400; color: #9a9a9e; margin-left: 6px; }
+.trk .cur { font: 600 13px -apple-system, sans-serif; color: var(--c); font-variant-numeric: tabular-nums; }
+.trk .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.trk .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.steps { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; }
+.steps span { height: 5px; border-radius: 2px; background: var(--part); }
+.steps span:nth-child(4n+1) { background: #3a3a3e; }
+.steps span.on { background: var(--c); }
+.trk.frozen { box-shadow: inset 0 0 0 1px #79b8ff; }
+.midi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 14px; background: var(--tray); border-radius: 14px; }
+.midi-log { display: flex; flex-wrap: wrap; gap: 6px 14px; font: 12px ui-monospace, Menlo, monospace; color: var(--label); min-width: 0; }
+.midi-log span { min-width: 9em; }
+.midi-log span em { font-style: normal; color: var(--c); }
+@media (max-width: 520px) { .gen { padding: 14px 12px; border-radius: 20px; } .gen-row { padding: 10px; } }
