@@ -10,9 +10,9 @@ const bytes = fs.readFileSync(process.argv[2] || "build/emu/felucca.wasm");
 let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
-             PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15 };
-const tk = (t, k) => 16 + t * 16 + k;
+             PLAY: 11, REGEN: 12, MACRO: 13 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17 };
+const tk = (t, k) => 16 + t * 24 + k;
 
 async function device() {
   const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -186,6 +186,47 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
     for (let k = 0; k < 8; k++) { e.render(60); const d = new Uint8Array(e.mem.buffer, e.ex.web_gen_info(), 37)[36]; if (d > 100) ok = false; }
   }
   check("every modulation shape keeps density within 0..100", ok);
+}
+
+// MACRO: every track's density by its weight; MIDI CC 16 turns it; CHANCE thins a frozen pattern's notes
+{
+  const f = await device();
+  f.render(1200);
+  f.ex.web_gen(GP.BPM, 120);
+  f.ex.web_gen(GP.ON, 1);
+  f.ex.web_gen(tk(0, GK.WEIGHT), 100);
+  f.ex.web_gen(tk(1, GK.WEIGHT), -100);
+  f.ex.web_gen(tk(2, GK.WEIGHT), 0);
+  f.ex.web_gen(tk(3, GK.WEIGHT), 50);
+  f.ex.web_gen(GP.PLAY, 1);
+  f.render(300);
+  const dn = () => [...new Uint8Array(f.mem.buffer, f.ex.web_gen_info(), 38).slice(33, 38)];
+  f.ex.web_gen(GP.MACRO, 40);
+  f.render(300);
+  const a1 = dn();
+  f.ex.web_midi(0xB5, 16, 0);                                // CC 16 on channel 6: the macro to -100
+  f.render(300);
+  const a2 = dn();
+  check(`MACRO +40: densities ${a1.slice(0, 4)}; CC 16 = 0 (-100): ${a2.slice(0, 4)}, macro read back ${a2[4] - 100}`,
+        a1[0] === 90 && a1[1] === 0 && a1[2] === 45 && a1[3] === 65 && a2[0] === 0 && a2[1] === 100 && a2[2] === 45 && a2[4] === 0);
+  // CHANCE: a frozen, mutation-0 melody at 100 % plays the same notes each bar; at 40 % about 40 % of them, and bars differ
+  f.ex.web_midi(0xB0, 16, 64);
+  f.ex.web_gen(tk(3, GK.DENS), 100);
+  f.ex.web_gen(tk(3, GK.REST), 0);
+  f.ex.web_gen(GP.MUT, 0);
+  f.ex.web_gen(GP.RATE, 12);
+  f.render(2000);
+  f.ex.web_gen(tk(3, GK.FREEZE), 1);
+  f.render(2000);
+  const count = (bars) => { f.midi.length = 0; f.render(bars * 2000); const m = f.midi.filter((x) => x.st === 0x93); return m; };
+  const full = count(4).length;
+  f.ex.web_gen(tk(3, GK.CHANCE), 40);
+  f.render(2000);
+  const part = count(8);
+  const perBar = [0, 1, 2, 3, 4, 5, 6, 7].map((b) => part.filter((x) => x.f >= part[0].f - 3000 + b * 88200 && x.f < part[0].f - 3000 + (b + 1) * 88200).map((x) => x.n).join(","));
+  const ratio = part.length / 2 / full;
+  check(`CHANCE 40 % on a frozen melody: ${(ratio * 100).toFixed(0)} % of its notes play, the bars differ`,
+        ratio > 0.25 && ratio < 0.55 && new Set(perBar).size > 3);
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");

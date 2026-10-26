@@ -36,6 +36,7 @@ The generator writes each step into the track's Felucca pattern just before the 
 | Master rate | ½ bar to 32 bars | How long the master stays on each chord. Includes 3, 5, 7, 12 and 24 bars |
 | Dyad B | Independent, Merge, Call and response | How the two dyad tracks relate (below) |
 | Mutation | 0–100 | How much the patterns and the loop change each time round |
+| Macro | −100 to +100 | One knob that pushes every track's density up or down, each by its own macro weight. MIDI CC 16 on any channel turns it (64 is the centre). Double-click the slider to centre it |
 | New progression | button | Draws a whole new loop now |
 
 ### Scales
@@ -81,7 +82,9 @@ Every track has these:
 | Density mod | Moves the density over time: Off, Sine, Triangle, Ramp up, Ramp down, Square, Random (a new value each period) or Drift (random, gliding between values) |
 | Mod rate | How long one cycle of the density mod takes, ¼ bar to 32 bars, in time with the music |
 | Mod depth | How far the mod moves the density, −100 to +100. Negative values turn the shape upside down. The meter shows the density in use right now |
-| Freeze | Stop writing this track: its current bar loops as it is, through chord changes too |
+| Macro weight | How much, and which way, the macro moves this track's density, −100 to +100. At 100 the macro's full swing moves the density by 100; a negative weight thins the track as the macro rises |
+| Chance | 1–100 %. Each note this track writes plays only at this chance, rolled every time the step comes round, so even a frozen pattern never repeats exactly. At 100 % every note plays |
+| Freeze | Stop writing this track: its current bar loops as it is, through chord changes too. Chance still applies |
 | Mute | Silence the track; it keeps running underneath |
 
 The card header shows the track's MIDI channel and the chord it is playing now. The strip under it shows which step of the pattern is playing.
@@ -131,11 +134,13 @@ Each track sends its notes on its own USB MIDI channel: Dyad A on 1, Dyad B on 2
 
 On the web page, the MIDI out line shows the notes each channel is holding. Where the browser allows Web MIDI, a **Send to** menu appears there, and choosing a port sends the notes to that device.
 
-Incoming MIDI plays the tracks as it does in Felucca. MIDI in modes that steer the generator are planned.
+MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the tracks as it does in Felucca. MIDI in modes that steer the generator are planned.
 
 ## Tips
 
 - **Slow harmony, busy parts:** set the master rate to 4 or 8 bars, raise the melody's density, and set dyad B to ×½ so it moves twice as often as the master.
+- **One-knob build:** set the macro weights to Dyad A 30, Dyad B 60, Bass 20 and Melody 100, start the macro at −100 and bring it up over a few minutes, so the melody arrives last and the bass barely moves. Map it to a knob on a controller with CC 16.
+- **Loose loops:** freeze a melody you like and set its chance to about 70 %, so the phrase stays recognisable but drops different notes each time.
 - **Breathing parts:** give the melody a Sine density mod over 8 bars and the dyads a Square over 4, so the parts take turns being busy.
 - **Shifting patterns:** give the melody 5 or 7 steps and the bass 12, so the parts line up differently every bar.
 - **A phrase that evolves:** keep mutation around 10. Freeze the melody when you hear a phrase you like.

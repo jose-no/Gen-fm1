@@ -394,6 +394,8 @@ static volatile uint8_t *const mpc_io;
  * channel aftertouch, Program Change, so they stay free for other instruments. */
 static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint32_t d1, uint32_t d2)
 {
+    if (st == 0xB0u && gen_midi_cc(d1, d2))       /* the generator's MACRO (gen.c), on any channel */
+        return;
     if (song.g[G_ROUTE] != 1 && !midi_in_block(ch))
         return;
     if (st == 0x90u || st == 0x80u)

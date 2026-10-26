@@ -1,9 +1,9 @@
 // ------------------------------------------------------------------ the generative machine (firmware/src/gen.c)
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 16 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), its MIDI OUT as it happens (web_midi_out).
-const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15 };
-const gtk = (t, k) => 16 + t * 16 + k;
+const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17 };
+const gtk = (t, k) => 16 + t * 24 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
 const $ = (id) => document.getElementById(id);
 const NOTE = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -19,13 +19,13 @@ const PATCHES = ["Tine EP", "Bell", "FM Bass", "Brass", "Pad", "Marimba", "Organ
 const OUTS = ["Synth + MIDI", "Synth only", "MIDI only"];
 const TRACKS = [
   { name: "Dyad A", short: "A", modes: ["3rds", "5ths", "6ths", "Auto (voice-led)"], rhythms: true,
-    d: { patch: 0, mult: 2, lock: 0, mode: 0, rhy: 0, dens: 50, oct: 0 } },
+    d: { patch: 0, mult: 2, lock: 0, mode: 0, rhy: 0, dens: 50, oct: 0, weight: 60, chance: 100 } },
   { name: "Dyad B", short: "B", modes: ["3rds", "5ths", "6ths", "Auto (voice-led)"], rhythms: true,
-    d: { patch: 4, mult: 3, lock: 0, mode: 3, rhy: 1, dens: 40, oct: 0 } },
+    d: { patch: 4, mult: 3, lock: 0, mode: 3, rhy: 1, dens: 40, oct: 0, weight: 80, chance: 100 } },
   { name: "Bass", short: "Bs", modes: ["Root", "Root and 5th", "Walking", "Octaves"],
-    d: { patch: 2, mult: 2, lock: 1, mode: 1, dens: 45, oct: 0 } },
+    d: { patch: 2, mult: 2, lock: 1, mode: 1, dens: 45, oct: 0, weight: 40, chance: 100 } },
   { name: "Melody", short: "M", modes: ["Chord tones", "Scale", "Passing tones"], melody: true,
-    d: { patch: 7, mult: 2, lock: 0, mode: 2, dens: 45, oct: 0, leap: 25, rest: 20 } },
+    d: { patch: 7, mult: 2, lock: 0, mode: 2, dens: 45, oct: 0, leap: 25, rest: 20, weight: 100, chance: 100 } },
 ];
 const RHYTHMS = ["Sustain", "Pulse", "Arpeggio", "Euclidean"];
 const DMSHAPES = ["Off", "Sine", "Triangle", "Ramp up", "Ramp down", "Square", "Random", "Drift"];
@@ -50,6 +50,8 @@ bindSel("g-combine", GP.COMBINE);
 $("g-bpm").addEventListener("change", (e) => { const v = Math.min(240, Math.max(40, +e.target.value || 120)); e.target.value = v; gset(GP.BPM, v); });
 $("g-mut").addEventListener("input", (e) => { $("g-mut-o").textContent = e.target.value; gset(GP.MUT, +e.target.value); });
 $("g-regen").addEventListener("click", () => gset(GP.REGEN, 1));
+$("g-macro").addEventListener("input", (e) => { $("g-macro-o").textContent = e.target.value; gset(GP.MACRO, +e.target.value); });
+$("g-macro").addEventListener("dblclick", (e) => { e.target.value = 0; $("g-macro-o").textContent = 0; gset(GP.MACRO, 0); });
 function showPreset() { const s = +$("g-src").value; $("g-preset-l").hidden = !(s === 0 || s === 6); }
 showPreset();
 
@@ -98,10 +100,12 @@ const cards = TRACKS.map((T, t) => {
         <label>Mod rate <select id="${id("dmrate")}"></select></label>
       </div>
       <label class="wide">Mod depth <input type="range" id="${id("dmdepth")}" min="-100" max="100" value="0"> <output id="${id("dmdepth-o")}">0</output></label>
+      <label class="wide">Macro weight <input type="range" id="${id("weight")}" min="-100" max="100"> <output id="${id("weight-o")}"></output></label>
       <div class="meter" aria-label="Density now"><span id="${id("dnow")}"></span><em id="${id("dnow-o")}">–</em></div>
     </div>
     ${T.melody ? `<label class="wide">Leaps <input type="range" id="${id("leap")}" min="0" max="100"> <output id="${id("leap-o")}"></output></label>
     <label class="wide">Rests <input type="range" id="${id("rest")}" min="0" max="100"> <output id="${id("rest-o")}"></output></label>` : ""}
+    <label class="wide">Chance <input type="range" id="${id("chance")}" min="1" max="100"> <output id="${id("chance-o")}"></output></label>
     <div class="checks">
       <label class="check"><input type="checkbox" id="${id("lock")}"> Harmony lock</label>
       <label class="check"><input type="checkbox" id="${id("freeze")}"> Freeze</label>
@@ -142,6 +146,10 @@ const cards = TRACKS.map((T, t) => {
     r.addEventListener("input", () => { o.textContent = r.value; gset(gtk(t, gk), +r.value); });
   };
   range("dens", GK.DENS);
+  range("weight", GK.WEIGHT);
+  range("chance", GK.CHANCE);
+  q("chance-o").textContent += " %";
+  q("chance").addEventListener("input", () => { q("chance-o").textContent = q("chance").value + " %"; });
   if (T.melody) { range("leap", GK.LEAP); range("rest", GK.REST); }
   q("lock").addEventListener("change", (e) => { gset(gtk(t, GK.LOCK), e.target.checked ? 1 : 0); q("mult").disabled = e.target.checked; });
   q("freeze").addEventListener("change", (e) => { gset(gtk(t, GK.FREEZE), e.target.checked ? 1 : 0); c.classList.toggle("frozen", e.target.checked); });
@@ -168,6 +176,7 @@ function drawGen(g) {
   const s = { on: g[0], playing: g[1], root: g[2], scale: g[3], llen: g[5], curM: g[6], curT: [g[7], g[8], g[9], g[10]],
               mask: g[11] | g[12] << 8, step: [g[13], g[14], g[15], g[16]], loop: [...g.slice(17, 17 + g[5])] };
   genState = s;
+  if (g.length > 37 && document.activeElement !== $("g-macro")) { $("g-macro").value = g[37] - 100; $("g-macro-o").textContent = g[37] - 100; }
   genOn = !!s.on;
   genPlaying = !!s.playing;
   $("gen-on").setAttribute("aria-pressed", String(genOn));

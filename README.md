@@ -16,6 +16,8 @@ Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuros
 - **Chord timing:** a master rate from ½ bar to 32 bars. Each track walks the progression at the master rate times its own multiplier (×¼ to ×8), or follows the master chord exactly with harmony lock.
 - **Mutation:** one control for how much the patterns and progression change from pass to pass. At 0 every track repeats its bar, re-voiced onto each new chord. Freeze stops a track changing at all.
 - **Density modulation:** each track's density can move by itself with a sine, triangle, ramp, square, random or drifting shape, synced from ¼ bar to 32 bars.
+- **Macro:** one knob (or MIDI CC 16) that moves every track's density at once, each by its own weight, which can be negative.
+- **Chance:** each track's notes play at a chance from 1 to 100 %, so even a frozen pattern varies.
 - **Per track:** pattern length (1–16 steps, so tracks can run in different lengths), FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
 - **MIDI out:** each track sends its notes on its own channel (tracks 1–4 on channels 1–4).
 
@@ -67,7 +69,7 @@ The firmware builds the same way as Felucca. It needs the JieLi toolchain and th
 ## Planned
 
 - Controls on the FM-1's own screen and knobs
-- Modulation of the chord rate (LFO, random, rate sequences, probability), and MIDI CC control of the density mod
+- Modulation of the chord rate (LFO, random, rate sequences, probability)
 - Scala (.scl) scale import and microtonal tuning
 - MIDI in modes: play a track, transpose the generator, or reseed it
 - More progression sources: borrowed chords, melody-led, MIDI-led, and a blend of two

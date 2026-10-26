@@ -76,6 +76,8 @@ static void gen_set(uint32_t id, int32_t v)
         case GK_DMSRC: g->dmsrc = (uint8_t)gen_lim(v, 0, GDM_COUNT - 1); break;
         case GK_DMRATE: g->dmrate = (uint8_t)gen_lim(v, 0, GEN_NDMRATE - 1); break;
         case GK_DMDEPTH: g->dmdepth = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
+        case GK_WEIGHT: g->weight = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
+        case GK_CHANCE: g->chance = (uint8_t)gen_lim(v, 1, 100); break;
         case GK_LEN:
             g->len = (uint8_t)gen_lim(v, 1, GEN_STEPS);
             if (gen.on)
@@ -99,6 +101,7 @@ static void gen_set(uint32_t id, int32_t v)
     case GP_BPM: song.g[G_BPM] = (int16_t)gen_lim(v, 40, 240); break;
     case GP_PLAY: transport_req = v ? 1u : 2u; break;
     case GP_REGEN: gen.regen = 1; break;
+    case GP_MACRO: gen.macro = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
     default: break;
     }
     if (!song.playing && gen.regen) {
