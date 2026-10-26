@@ -166,7 +166,11 @@ function drawGen(g) {
   });
 }
 
-$("gen-on").addEventListener("click", () => gset(GP.ON, genOn ? 0 : 1));
+// On starts it playing at once; Off stops the transport too (the patterns it wrote stay)
+$("gen-on").addEventListener("click", () => {
+  if (genOn) { gset(GP.PLAY, 0); gset(GP.ON, 0); }
+  else { gset(GP.ON, 1); gset(GP.PLAY, 1); }
+});
 $("gen-play").addEventListener("click", () => gset(GP.PLAY, genPlaying ? 0 : 1));
 
 // USB MIDI OUT: what each channel holds now, and (where the browser allows Web MIDI) a port to send it to
@@ -205,7 +209,7 @@ async function genMidiPorts() {
 function genReady() {
   $("gen-on").disabled = false;
   $("gen-play").disabled = false;
-  $("gen-hint").textContent = "The firmware runs here exactly as it would on the FM-1. Its panel works too: SEQ shows the patterns being written.";
+  $("gen-hint").textContent = "Press On to start the generator playing. The FM-1 panel works too: SEQ shows the patterns being written.";
   gset(GP.BPM, +$("g-bpm").value);
   genMidiPorts();
 }
