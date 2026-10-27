@@ -8,7 +8,7 @@ A generative chord and melody machine for the M-VAVE FM-1 pocket synthesizer: fo
 
 Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments). Felucca supplies the hardware layer, the FM engine, the sequencer, the screen and the browser emulator. Gen-FM1 adds the generator on top.
 
-> **Status: proof of concept.** The generator runs in the browser emulator and passes its tests. It has not been flashed to a real FM-1 yet, and it has no controls on the FM-1's own screen yet: it is switched on and set from the web page.
+> **Status: not yet tested on hardware.** The generator runs in the browser emulator and passes its tests and Felucca's own. GitHub Actions builds the installable package with JieLi's toolchain. It has not been flashed to a real FM-1 yet.
 
 ## What it does
 
@@ -24,10 +24,19 @@ Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuros
 - **Drift and swing:** notes can land a little early or late by a random amount each pass (drift), or with a regular shuffle (swing), set for all tracks and for each track.
 - **Per track:** pattern length (1–16 steps, so tracks can run in different lengths), FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
 - **MIDI out:** each track sends its notes on its own channel (tracks 1–4 on channels 1–4).
+- **Two ways to control it:** the FM-1's own knobs and keys (ARP's GEN and TRACK pages, a quick layer on ARP held, SAVE's SETUPS and POWER ON pages), and a control page in the browser that talks to the FM-1 over USB. Changes on either side show on the other.
 
 The generator writes each track's pattern one step ahead of the playhead, so Felucca's own sequencer plays the notes and the SEQ screen shows the pattern as it is written.
 
 See [docs/MANUAL.md](docs/MANUAL.md) for every control.
+
+## Control page
+
+Once Pages is on for the repository, the control page is at https://jose-no.github.io/Gen-fm1/ and the test page at https://jose-no.github.io/Gen-fm1/try/. Connect the FM-1 with USB, open the page in Chrome or Edge, and press **Connect FM-1**, or press **Virtual FM-1** to try it without one. See the manual's [Control page](docs/MANUAL.md#control-page) section.
+
+## Getting the firmware
+
+Every push to `main` builds the package on GitHub Actions (the **build** workflow): the run's **gen-fm1-firmware** artifact holds `felucca.fwsc`. A tag such as `v0.1` makes a GitHub release with it. Install it as any Felucca release (Felucca's web installer, or M-VAVE's updater). Installing other firmware on the FM-1 is at your own risk; Felucca's web installer can put M-VAVE's firmware back.
 
 ## Try it in the browser
 
@@ -39,31 +48,40 @@ cd Gen-fm1
 pip3 install Pillow fonttools ziglang
 tools/gen_headers.sh               # generated tables, fonts and samples -> build/gen
 tools/emu_build_zig.sh             # the firmware -> build/emu/felucca.wasm
-python3 web/emu/make_gen_page.py   # the page -> build/genemu/
-cd build/genemu && python3 -m http.server 8000
+python3 web/emu/make_gen_page.py   # the test page -> build/genemu/
+python3 web/control/make_control_page.py   # the control page -> build/control/
+cd build/control && python3 -m http.server 8000
 ```
 
-Then open http://localhost:8000 in Chrome, Edge, Firefox or Safari, press **Switch on**, turn the generator **On** and press **Play**.
+Then open http://localhost:8000 in Chrome or Edge and press **Connect FM-1** or **Virtual FM-1**.
 
 ## Tests
 
 ```sh
-node web/emu/gen_test.mjs build/emu/felucca.wasm   # the generator
-node web/emu/emu_test.mjs build/emu/felucca.wasm   # Felucca's own emulator checks
+node web/emu/gen_test.mjs           # the generator
+node web/emu/gen_editor_test.mjs    # its USB protocol
+node web/emu/gen_ui_test.mjs        # its pages on the FM-1's screen
+node web/control/gen_link_test.mjs  # the control page's link
+node web/control/control_page_test.mjs build/control usb   # the control page (npm install jsdom)
+node web/emu/emu_test.mjs           # Felucca's own emulator checks
+tests/run_tests.sh                  # Felucca's host suite (after ./build.sh)
 ```
 
 The generator test checks that it sounds, that every note stays in the scale, that MIDI note-ons and note-offs pair up on channels 1–4, that track multipliers and harmony lock change chords at the right times, that freeze with mutation at 0 repeats the bar, that every progression source makes a valid loop, and that the same settings always give the same audio.
 
 ## Building for the FM-1
 
-The firmware builds the same way as Felucca. It needs the JieLi toolchain and three files from JieLi's AC79 SDK; see [BUILDING.md](BUILDING.md). Installing other firmware on the FM-1 is at your own risk. Felucca's web installer can put M-VAVE's firmware back.
+The firmware builds the same way as Felucca. It needs the JieLi toolchain and three files from JieLi's AC79 SDK; see [BUILDING.md](BUILDING.md), or let GitHub Actions do it (`.github/workflows/build.yml`).
 
 ## Where the code is
 
 | File | What |
 | --- | --- |
 | `firmware/src/gen.c` | The generator: harmony engine, progression sources, the four track generators, MIDI out |
-| `firmware/src/gen_setup.c` | Switching it on and changing settings |
+| `firmware/src/gen_setup.c` | Switching it on, settings, setups and power-on |
+| `firmware/src/ui_gen.c` | Its pages on the FM-1's screen and the ARP quick layer |
+| `firmware/src/editor_gen.c` | Its USB SysEx protocol (see `web/EDITOR_PROTOCOL.md`) |
+| `web/control/` | The control page and its link (`gen_link.js`) |
 | `firmware/src/seq.c` | Felucca's sequencer, with three small hooks into the generator |
 | `web/emu/gen_panel.*` | The generator's controls on the web page |
 | `web/emu/make_gen_page.py` | Builds the test page from Felucca's emulator page |
@@ -72,7 +90,6 @@ The firmware builds the same way as Felucca. It needs the JieLi toolchain and th
 
 ## Planned
 
-- Controls on the FM-1's own screen and knobs
 - Modulation of the chord rate (LFO, random, rate sequences, probability)
 - Scala (.scl) scale import and microtonal tuning
 - MIDI in modes: play a track, transpose the generator, or reseed it

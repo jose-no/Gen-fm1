@@ -174,6 +174,9 @@ static void ui_power_on(void)
     memset(&chain, 0, sizeof chain);
     chain_defaults(&chain_config);
     memset(&ui, 0, sizeof ui);
+#ifdef GEN_FM1
+    memset(&gen, 0, sizeof gen);                  /* Gen-FM1: the generator off, as before gen_boot (its own tests: web/emu) */
+#endif
     page_over = 0;                                /* (no layer's knobs; roll_settle's test page gone) */
     cin_left = cin_total = 0;                     /* (no count-in) */
     memset(&nm, 0, sizeof nm);                    /* NAME closed, no project name */
@@ -2684,7 +2687,11 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173) */
+#ifdef GEN_FM1                                    /* Gen-FM1: the generator's SETUPS and POWER ON after TOOLS */
+    static const char *const SAVE_CYC[] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "SETUPS", "POWER ON", "USER"};
+#else
+    static const char *const SAVE_CYC[] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173) */
+#endif
     int bad = 0, ok = 1;
     uint32_t i, n0;
     step_t ref[NSTEP], want;
@@ -2692,7 +2699,7 @@ static int test_page_cycles(void)
     uint16_t rw[EV_ROWS];
     /* the cycles: each button's taps, in order */
     ui_power_on();
-    for (i = 0; i < 6u; i++) {
+    for (i = 0; i < NELEM(SAVE_CYC); i++) {
         press(B_SAVE); frames(320);
         ok &= !ui.home && cur_page()->fam == FAM_SAVE && str_eq(cur_page()->title, SAVE_CYC[i]);
     }
@@ -3302,6 +3309,10 @@ static int test_layer(void)
             ok &= !ui.home && cur_page()->fam == PF[i];
             if (PB[i] == B_SCL || PB[i] == B_GLO || PB[i] == B_EDIT)
                 continue;                             /* (a layer of their own: held long is a peek) */
+#ifdef GEN_FM1
+            if (PB[i] == B_ARP)
+                continue;                             /* (Gen-FM1: ARP has the generator's quick layer) */
+#endif
             ui_power_on();
             hold(PB[i]);                              /* (no layer of their own: a long press is a tap too) */
             ok &= !ui.home && cur_page()->fam == PF[i];

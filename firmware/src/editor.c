@@ -363,7 +363,13 @@ static int ed_flash_stop(void)
 #include "editor_menu.c"
 #include "editor_learn.c"                    /* 1.5: MIDI LEARN's map (cmds 78, 79) */
 #include "editor_palette.c"                  /* 1.6: CUSTOM, the user's palette (cmds 80, 81) */
+#ifdef GEN_FM1
 #include "editor_gen.c"                      /* the generative machine (cmds 96..101) */
+#else                                        /* built without the generator (host tests of the editor alone) */
+static int ed_gen_handle(uint32_t cmd, const uint8_t *a, uint32_t na) { (void)cmd; (void)a; (void)na; return 0; }
+static void ed_gen_sync(uint32_t now, uint32_t *n) { (void)now; (void)n; }
+static void ed_gen_off(void) {}
+#endif
 
 /* MOTION's reply: the records of track k as (step, id, v14), a lock's id without its MOTION_LOCK bit (a 7-bit SysEx
  * byte); kinds (1.1: the ops 5..7): then one byte per record, in the same order, 0 automation, 1 lock. The query and

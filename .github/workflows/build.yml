@@ -1,0 +1,137 @@
+# Gen-FM1: build the FM-1 firmware package (felucca.fwsc) with JieLi's toolchain, run the size / RAM / CPU checks and
+# the test suites, and publish the control page on GitHub Pages.
+#   push / pull request   build + tests; the package is attached to the run (Actions > the run > Artifacts)
+#   tag vX.Y (e.g. v0.1)   also a GitHub release with the package
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Python and Node packages
+        run: |
+          pip install Pillow fonttools ziglang==0.17.0
+          npm install --no-save --no-package-lock jsdom@24
+
+      # JieLi's Linux toolchain (clang 4.0.1 for pi32v2), kept between runs
+      - name: Cache the JieLi toolchain
+        id: tc
+        uses: actions/cache@v4
+        with:
+          path: ~/.jieli
+          key: jieli-toolchain-v1
+      - name: Download the JieLi toolchain
+        if: steps.tc.outputs.cache-hit != 'true'
+        run: tools/get_toolchain.sh
+
+      # three files of JieLi's AC79 SDK (Apache-2.0) go into the package; build.py checks their SHA-256
+      - name: Cache the AC79 SDK files
+        id: sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/fw-AC79_AIoT_SDK
+          key: ac79-sdk-V1.2.1-2023-12-13
+      - name: Fetch the AC79 SDK files
+        if: steps.sdk.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse --branch AC79NN_SDK_V1.2.1_2023-12-13 \
+              https://gitee.com/Jieli-Tech/fw-AC79_AIoT_SDK.git ~/fw-AC79_AIoT_SDK
+          cd ~/fw-AC79_AIoT_SDK
+          git sparse-checkout set --no-cone /cpu/wl82/tools/uboot.boot /cpu/wl82/tools/cfg_tool.bin /cpu/wl82/tools/cfg/eq_cfg_hw.bin
+          ls -l cpu/wl82/tools/uboot.boot cpu/wl82/tools/cfg_tool.bin cpu/wl82/tools/cfg/eq_cfg_hw.bin
+
+      # the build: app + loader + package, and its checks (flash size, RAM, stack, the HAL rule)
+      - name: Build the firmware
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then ./build.sh --release "${GITHUB_REF_NAME#v}"; else ./build.sh; fi
+
+      - name: Package
+        run: ls -l build/*.fwsc build/felucca.bin build/loader/ota.bin
+
+      # Felucca's host suite (golden renders, CPU, flash storage, UI screens, ...) and the target CPU budget
+      - name: Host tests
+        run: tests/run_tests.sh
+
+      # the generator in the browser build: engine, editor protocol, screens, the control page's link and page
+      - name: Generator tests
+        run: |
+          tools/emu_build_zig.sh
+          node web/emu/emu_test.mjs
+          node web/emu/gen_test.mjs
+          node web/emu/gen_editor_test.mjs
+          node web/emu/gen_ui_test.mjs
+          node web/control/gen_link_test.mjs
+          python3 web/control/make_control_page.py
+          python3 web/emu/make_gen_page.py
+          node web/control/control_page_test.mjs build/control virtual
+          node web/control/control_page_test.mjs build/control usb
+
+      - name: Keep the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gen-fm1-firmware
+          path: |
+            build/*.fwsc
+            build/felucca.bin
+            build/release-*/
+          if-no-files-found: error
+
+      - name: The web pages
+        run: |
+          mkdir -p site/try
+          cp -r build/control/. site/
+          cp -r build/genemu/. site/try/
+          touch site/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: site
+
+      - name: Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/release-*/*
+          body: |
+            Gen-FM1 ${{ github.ref_name }}: Felucca with the 4-track generative machine, for the M-VAVE FM-1.
+            Install the .fwsc as any Felucca release (see docs/MANUAL.md). Control page: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+  pages:
+    needs: firmware
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref_type == 'tag')
+    runs-on: ubuntu-latest
+    continue-on-error: true          # until Pages is on (Settings > Pages > Source: GitHub Actions)
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

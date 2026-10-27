@@ -54,6 +54,11 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
     {"CLOCK", "[SELECT]TEMPO[GLO]HOLD: TAP"},
+    /* Gen-FM1: the generator's pages (ui_gen.c) */
+    {"GEN", "[K1-4]GENERATOR[ARP]HOLD: QUICK"},
+    {"TRACK", "[ALGO]TRACK[K1-4]ITS PART"},
+    {"SETUPS", "[K1]SLOT[OCT+]DO[SAVE]POWER ON"},
+    {"POWER ON", "[K1]AT POWER-ON[OCT+]DO"},
 };
 #define H_HOME "[PRESETS]SOUND[HOME]HOLD: MENU"
 #define H_LEVELS "[K1-4]T1-T4 LEVEL[HOME]MIXER"
@@ -62,7 +67,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 static const char *const HELP_LAYER[LAYER_N] = {
     "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
     "[K1]ENGINE[K2]SOUND[K3]FAV", "[K1]LENGTH[K3]SWING[K4]GATE", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
-    "[OCT-]PUT BACK[K1-4]KEY SCL MUT MACRO",
+    "[OCT-]UNDO[K1-4]KEY SCL MUT MACRO",
 };
 
 static const char H_EUCLID[] = "[K1]HITS[K2]STEPS[K3]ROTATE";   /* SEQ TOOLS' EUCLID open (1.5.5) */

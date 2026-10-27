@@ -168,8 +168,6 @@ static void lcd_init(void) {}
 #include "../../firmware/src/ui_menu.c"
 #include "../../firmware/src/ui_input.c"
 #include "../../firmware/src/ui_layer.c"
-#include "../../firmware/src/gen_setup.c"     /* the generative machine's settings */
-#include "../../firmware/src/ui_gen.c"        /* the generator on the screen */
 
 /* ------------------------------------------------------------ the flash --- */
 static uint32_t web_flash_writes;

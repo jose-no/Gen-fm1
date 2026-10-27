@@ -1,14 +1,61 @@
 # Gen-FM1 manual
 
-Gen-FM1 turns the FM-1 into four generative tracks that play together in one key. This manual covers the generator's controls on the web page. Everything else on the FM-1 (the panel, the screen, the SEQ page, MIDI in) works as in [Felucca](https://github.com/hugelton/Felucca/wiki).
+Gen-FM1 turns the FM-1 into four generative tracks that play together in one key. Every setting can be made in two places: on the FM-1 itself (its screen, knobs and keys) and on the control page, a web page that talks to the FM-1 over USB. The two stay in step: turn a knob on the FM-1 and the page moves; change something on the page and the FM-1's screen shows it. Everything else on the FM-1 (the panel, the screen, the SEQ page, MIDI in) works as in [Felucca](https://github.com/hugelton/Felucca/wiki).
 
 ## Getting started
 
-1. Switch the FM-1 on (on the web page: press **Switch on** on the FM-1 picture). The generator starts with it, with a new setup drawn at random: key, scale, tempo, progression, and each track's sound, rhythm and density (see [Random setups](#random-setups)).
-2. Press **PLAY** on the FM-1, or **Play** on the web page.
-3. Change anything while it plays. Changes take effect from the next step.
+1. Switch the FM-1 on. The generator starts with it, with a new setup drawn at random: key, scale, tempo, progression, and each track's sound, rhythm and density (see [Random setups](#random-setups)).
+2. Press **PLAY**.
+3. Press **ARP** to reach the generator's pages, and turn the knobs while it plays. Changes take effect from the next step.
 
-The **On** button turns the generator off and on again. Off stops playback and the generator; the patterns it last wrote stay and play like any Felucca pattern. At the next power-on it starts again.
+The generator can be switched off on the FM-1 (SAVE > POWER ON, KNOB 4) or with the control page's **On** button. Off stops playback and the generator; the patterns it last wrote stay and play like any Felucca pattern. At the next power-on it starts again.
+
+## On the FM-1
+
+The generator's pages replace ARP's while the generator runs. Each page shows four settings, one per knob, as Felucca's pages do; turn a knob to change its setting.
+
+**ARP** (tap it again for the next page):
+
+| Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+| --- | --- | --- | --- | --- |
+| GEN 1 | Key | Scale | Progression source | Chords in the loop |
+| GEN 2 | Master rate | Mutation | Macro | Dyad B mode |
+| GEN 3 | Drift (all) | Swing (all) | Preset | Tuning (432 / 440) |
+| TRACK 1 | Sound | Interval, pattern or note pool | Rhythm (dyads) or leaps (melody) | Density |
+| TRACK 2 | Length | Chord rate | Harmony lock | Octave |
+| TRACK 3 | Chance | Drift | Swing | Macro weight |
+| TRACK 4 | Density mod | Mod rate | Mod depth | Rests (melody) |
+| TRACK 5 | Output | Freeze | Mute | |
+
+GEN pages show the progression loop with the chord playing now, and each track's chord under its knob. TRACK pages work on the selected track: **ALGORITHM** picks it, as on every Felucca page. Their screen shows the track's pattern as the generator writes it (press PLAY to see it move).
+
+**Hold ARP** for the quick layer: the keys pick the key (F3 to E4 give F to E), KNOBS 1–4 set key, scale, mutation and macro, **OCT+** draws a new random setup, and **OCT−** puts back the setup you had when you opened the layer. The map shows which notes are in the scale and the progression in Roman numerals. Let go of ARP to close it.
+
+**SAVE** (after Felucca's own USER, PRESETS, PHRASES, PROJECT and TOOLS pages):
+
+| Page | What it does |
+| --- | --- |
+| SETUPS | KNOB 1 picks a slot (1–8); the grid shows which hold a setup and which one power-on starts from. KNOB 2, 3 or 4 picks CLEAR, LOAD or SAVE, and **OCT+** does it. Clear and Save over a used slot ask first |
+| POWER ON | KNOB 1: what power-on does (RAND, LAST, or SET 1–8). KNOB 2 picks RANDOM (a new setup now) and KNOB 3 DEFAULTS (asks first); **OCT+** does it. KNOB 4 switches the generator on or off |
+
+The custom scale's notes and the "New progression" button are on the control page only.
+
+## Control page
+
+The control page has every setting, laid out on one screen, and talks to the FM-1 over its USB cable. Open it in Chrome or Edge on a computer (they have Web MIDI; Safari and Firefox on iOS don't).
+
+1. Connect the FM-1 to the computer with USB.
+2. Open the control page and press **Connect FM-1**. The browser asks to allow MIDI with SysEx: allow it.
+3. The page reads every setting from the FM-1 and shows them. From then on:
+   - a change on the page goes to the FM-1 straight away;
+   - a change on the FM-1 (a knob, the ARP layer, RANDOM, a setup loaded, MIDI CC 16) shows on the page within a moment;
+   - the transport, the chords playing and each track's notes show live.
+
+**Disconnect** stops the link; the FM-1 carries on playing. If the cable comes out, the page says so: plug it back in and press Connect FM-1 again.
+
+No FM-1 to hand? **Virtual FM-1** runs the same firmware inside the page, with its screen, knobs and keys, and links the panel to it the same way.
+
+The page needs the FM-1 to run Gen-FM1: plain Felucca doesn't answer the generator's messages, and the page says so. Use one page at a time with the FM-1: Felucca's own web editor talks over the same USB link.
 
 ## Random setups
 
@@ -20,11 +67,11 @@ Every power-on draws a new setup, so the FM-1 starts somewhere different each ti
 - **Densities** 25–75. About half the tracks get a density mod; a quarter get an odd length (5–14 steps); a third get some drift or a chance below 100 %. The bass is usually locked to the master chords.
 - **Not drawn:** each track's output (synth, MIDI or both) stays as you set it, and freeze, mute and the macro start off.
 
-On the web page, **Randomize** draws a new setup at any time, even while it plays, and **Defaults** returns to the settings this manual lists. To keep a setup you like, save it (next section).
+On the control page, **Randomize** draws a new setup at any time, even while it plays, and **Defaults** returns to the settings this manual lists. On the FM-1, hold ARP and press OCT+, or use SAVE > POWER ON > RANDOM. To keep a setup you like, save it (next section).
 
 ## Saving setups
 
-The FM-1 keeps 8 setups. A setup is everything the generator plays from: every setting on the page, the progression as it stands, the custom scale, the tempo and swing, and the patterns of any frozen tracks, so a phrase you froze comes back note for note.
+The FM-1 keeps 8 setups (on the FM-1: SAVE > SETUPS; on the control page: the setups row). A setup is everything the generator plays from: every setting on the page, the progression as it stands, the custom scale, the tempo and swing, and the patterns of any frozen tracks, so a phrase you froze comes back note for note.
 
 | Control | What it does |
 | --- | --- |
@@ -38,7 +85,7 @@ The FM-1 keeps 8 setups. A setup is everything the generator plays from: every s
 
 Setups are kept in the same flash record as Felucca's own settings, which has two copies, so a power cut while saving cannot lose them. If you ever reinstall plain Felucca, it won't recognise the larger record and will reset its own display preferences once. Your setups are only lost if Felucca then saves its settings over them.
 
-On the web page, setups are kept in your browser, as Felucca's web page keeps its saves.
+With the Virtual FM-1, setups are kept in your browser, as Felucca's web page keeps its saves.
 
 ## How it works
 
@@ -172,7 +219,7 @@ Gen-FM1 tunes to A = 432 Hz unless you choose 440. It uses Felucca's master tune
 
 Each track sends its notes on its own USB MIDI channel: Dyad A on 1, Dyad B on 2, Bass on 3, Melody on 4. Set a track's output to MIDI only to drive an external synth instead of the FM-1's own sound. The FM-1's MENU > MIDI > MIDI IN setting moves all four to channels 5–8, 9–12 or 13–16, or lets you give each track its own channel.
 
-On the web page, the MIDI out line shows the notes each channel is holding. Where the browser allows Web MIDI, a **Send to** menu appears there, and choosing a port sends the notes to that device.
+On the control page, the MIDI out line shows the notes each channel is holding. Where the browser allows Web MIDI, a **Send to** menu appears there, and choosing a port sends the notes to that device.
 
 MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the tracks as it does in Felucca. MIDI in modes that steer the generator are planned.
 
@@ -191,6 +238,5 @@ MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the track
 
 ## Limits of this version
 
-- No controls on the FM-1's own screen yet. Settings are made on the web page.
 - The generator replaces the patterns Felucca kept from its last session at every power-on; the generator's own setups are kept as described in [Saving setups](#saving-setups).
 - Not yet tested on a real FM-1.

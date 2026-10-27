@@ -169,6 +169,7 @@ static void gen_apply_tracks(void)
  * power-on does. A setup is everything the generator plays from: its settings, the progression loop as it stands,
  * the custom scale, the tempo and global swing, the seed, and the patterns of its frozen tracks (a frozen phrase
  * comes back as it was) */
+#define GEN_FM1 1                                /* project.c / editor.c: the generator is built in */
 #define GEN_STORE_MAGIC 0x314E4547u              /* "GEN1" */
 #define GEN_NSLOT 8u
 enum { GBOOT_RANDOM, GBOOT_LAST, GBOOT_SLOT0 };

@@ -1304,3 +1304,8 @@ static void draw_layer(void)
         ui.foot_sig = 0;
     }
 }
+
+/* Gen-FM1: the generator's settings and setups (gen_setup.c) and its screens (GEN, TRACK, SETUPS, POWER ON). Included here, after the last UI file, so every
+   build of the UI (the firmware, the browser build, the host tests) has them. */
+#include "gen_setup.c"
+#include "ui_gen.c"
