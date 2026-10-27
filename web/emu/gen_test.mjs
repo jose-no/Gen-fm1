@@ -5,12 +5,13 @@
 // note-on matched by a note-off; every note is in the key's scale; the bass follows the master chord; a x2 track
 // changes chord half as often; FREEZE keeps a pattern; mutation 0 repeats the bar; the same seed gives the same audio.
 import fs from "fs";
+import { storeSectors, restoreSectors } from "./worklet.js";
 
 const bytes = fs.readFileSync(process.argv[2] || "build/emu/felucca.wasm");
 let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
-             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17 };
+             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const tk = (t, k) => 32 + t * 24 + k;
 
@@ -22,9 +23,10 @@ async function device(opt = {}) {
   const ex = instance.exports, mem = ex.memory;
   ex._initialize();
   ex.web_nor_erase();
+  if (opt.sectors) restoreSectors(new Uint8Array(mem.buffer, ex.web_nor(), ex.web_nor_size()), opt.sectors);
   if (opt.seed !== undefined) ex.web_gen_seed(opt.seed);
   ex.web_boot();
-  if (opt.seed === undefined) ex.web_gen(17, 1);
+  if (opt.seed === undefined && !opt.keep) ex.web_gen(17, 1);
   const d = { ex, mem, peak: 0, midi: [], audio: [] };
   d.render = (ms, keep) => {
     const n = Math.round(ms * 44.1);
@@ -359,6 +361,106 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
   for (const e of r.midi) { const k = (e.st & 15) * 128 + e.n; hold.set(k, (hold.get(k) || 0) + ((e.st & 0xf0) === 0x90 ? 1 : -1)); }
   check(`RANDOM while playing (new setup: ${changed}), then DEFAULTS (${back}); output kept; nothing left sounding`,
         changed && back && [...hold.values()].every((n) => n <= 0));
+}
+
+// SETUPS: save and load; flash written only once stopped; kept through a power cycle; power-on from a setup or
+// from where the last session left off
+{
+  const SET = [GP.ROOT, GP.SCALE, GP.SRC, GP.PRESET, GP.PLEN, GP.RATE, GP.MUT, GP.COMBINE, GP.BPM, GP.MACRO, GP.DRIFT, GP.SWING]
+    .concat([0, 1, 2, 3].flatMap((t) => [...Array(20).keys()].filter((k) => k !== GK.FREEZE).map((k) => tk(t, k))));
+  const vec = (d) => SET.map((i) => d.ex.web_gen_get(i)).join(",");
+  const loopOf = (d) => { const b = new Uint8Array(d.mem.buffer, d.ex.web_gen_info(), 42); return [...b.slice(17, 17 + b[5])].join(","); };
+  const flash = (d) => storeSectors(new Uint8Array(d.mem.buffer, d.ex.web_nor(), d.ex.web_nor_size()));
+  const info = (d, i) => new Uint8Array(d.mem.buffer, d.ex.web_gen_info(), 42)[i];
+
+  const a = await device();
+  a.render(1200);
+  a.ex.web_gen(GP.ROOT, 5); a.ex.web_gen(GP.SCALE, 3); a.ex.web_gen(GP.BPM, 97); a.ex.web_gen(tk(3, GK.DENS), 80);
+  a.ex.web_gen(tk(3, GK.LEN), 7); a.ex.web_gen(tk(1, GK.DMSRC), 2); a.ex.web_gen(GP.DRIFT, 12);
+  a.render(200);
+  const saved = vec(a), savedLoop = loopOf(a);
+  a.ex.web_gen(GP.SAVE, 3);
+  a.ex.web_gen(GP.RANDOM, 5);
+  a.render(200);
+  const changed = vec(a) !== saved;
+  a.ex.web_gen(GP.LOAD, 3);
+  a.render(200);
+  check(`SAVE 3, RANDOM, LOAD 3: every setting back (${vec(a) === saved}), the same progression (${loopOf(a)})`,
+        changed && vec(a) === saved && loopOf(a) === savedLoop && a.ex.web_gen_get(GP.SLOTS) === 4);
+
+  // a save while playing waits for STOP: nothing written to flash while it plays
+  a.ex.web_gen(GP.PLAY, 1);
+  a.render(1000);
+  const w0 = a.ex.web_flash_writes_count();
+  a.ex.web_gen(GP.SAVE, 5);
+  a.render(5000);
+  const w1 = a.ex.web_flash_writes_count(), waiting = info(a, 41);
+  a.ex.web_gen(GP.PLAY, 0);
+  a.render(3000);
+  const w2 = a.ex.web_flash_writes_count();
+  check(`SAVE while playing: no flash write for 5 s of play (${w1 - w0}), waiting (${waiting}); written after STOP (${w2 - w1})`,
+        w1 === w0 && waiting === 1 && w2 > w1 && info(a, 41) === 0);
+
+  // power-on from setup 3: a fresh FM-1 with this flash starts from it
+  a.ex.web_gen(GP.BOOT, 2 + 2);                              // SETUP 3
+  a.render(3000);
+  const b = await device({ sectors: flash(a), keep: true, seed: 1234 });
+  b.render(1200);
+  check(`power-on SETUP 3: the saved setup (${vec(b) === saved}), its progression, slots ${b.ex.web_gen_get(GP.SLOTS).toString(2)} kept`,
+        vec(b) === saved && loopOf(b) === savedLoop && b.ex.web_gen_get(GP.BOOT) === 4 && b.ex.web_gen_get(GP.SLOTS) === 0b10100);
+  // CLEAR the slot power-on uses: power-on goes back to RANDOM
+  b.ex.web_gen(GP.CLEAR, 3);
+  check("CLEAR 3: the slot is empty, power-on back to RANDOM", b.ex.web_gen_get(GP.SLOTS) === 0b10000 && b.ex.web_gen_get(GP.BOOT) === 0);
+
+  // power-on LAST: where the last session left off, a frozen track with its pattern
+  const c = await device({ seed: 99 });
+  c.render(1200);
+  c.ex.web_gen(GP.BOOT, 1);
+  c.ex.web_gen(GP.ROOT, 7); c.ex.web_gen(GP.BPM, 101); c.ex.web_gen(tk(3, GK.DENS), 90); c.ex.web_gen(tk(3, GK.REST), 0);
+  c.ex.web_gen(GP.PLAY, 1);
+  c.render(4000);
+  c.ex.web_gen(tk(3, GK.FREEZE), 1);
+  c.render(2000);
+  c.ex.web_gen(GP.PLAY, 0);
+  c.render(2500);                                             // written 1.5 s after STOP
+  const lastVec = vec(c), lastLoop = loopOf(c);
+  const d = await device({ sectors: flash(c), keep: true, seed: 4321 });
+  d.render(1200);
+  d.ex.web_gen(GP.PLAY, 1);
+  d.render(4000);
+  const mel = d.midi.filter((e) => e.st === 0x93).length;
+  check(`power-on LAST: the last session's settings (${vec(d) === lastVec}) and progression; the frozen melody kept, playing (${mel} notes)`,
+        vec(d) === lastVec && loopOf(d) === lastLoop && d.ex.web_gen_get(tk(3, GK.FREEZE)) === 1 && mel > 4);
+
+  // power-on RANDOM with setups saved: power-ons still differ, the setups stay (b: CLEAR 3 left slot 5, RANDOM)
+  b.render(3000);
+  const e1 = await device({ sectors: flash(b), keep: true, seed: 1 }), e2 = await device({ sectors: flash(b), keep: true, seed: 2 });
+  e1.render(300); e2.render(300);
+  check("with setups saved and power-on RANDOM: power-ons still differ, the setups stay",
+        vec(e1) !== vec(e2) && e1.ex.web_gen_get(GP.SLOTS) === 0b10000 && e2.ex.web_gen_get(GP.BOOT) === 0);
+
+  // a frozen phrase saved in a setup comes back note for note, after a power cycle
+  const f = await device();
+  f.render(1200);
+  f.ex.web_gen(GP.RATE, 12); f.ex.web_gen(tk(3, GK.DENS), 90); f.ex.web_gen(tk(3, GK.REST), 0); f.ex.web_gen(tk(3, GK.LEN), 8);
+  f.ex.web_gen(GP.PLAY, 1);
+  f.render(3000);
+  f.ex.web_gen(tk(3, GK.FREEZE), 1);
+  f.render(2500);
+  const bar = (d) => { d.midi.length = 0; d.render(2000); const m = d.midi.filter((e) => e.st === 0x93); return m.map((e) => e.n).join(","); };
+  const phrase = bar(f);
+  f.ex.web_gen(GP.SAVE, 1);
+  f.ex.web_gen(GP.BOOT, 2);
+  f.ex.web_gen(GP.PLAY, 0);
+  f.render(3000);
+  const g2 = await device({ sectors: flash(f), keep: true, seed: 77 });
+  g2.render(1200);
+  g2.ex.web_gen(GP.PLAY, 1);
+  g2.render(1000);
+  const again = bar(g2);
+  const per = (x) => x.split(",").length;
+  check(`a frozen 8-step melody saved in setup 1: after a power cycle it plays the same phrase (${per(phrase)} notes a bar)`,
+        phrase.length > 0 && g2.ex.web_gen_get(tk(3, GK.FREEZE)) === 1 && (again.includes(phrase.split(",").slice(0, 4).join(",")) || again === phrase));
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");

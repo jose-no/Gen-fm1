@@ -24,6 +24,16 @@
     <button type="button" id="g-regen" class="pill small">New progression</button>
   </div>
 
+  <div class="gen-row setups" role="group" aria-labelledby="g-setups-l">
+    <span class="lbl" id="g-setups-l">Setups</span>
+    <div class="slots" id="g-slots" role="radiogroup" aria-label="Setup slot"></div>
+    <button type="button" id="g-save" class="pill small" data-off="1" disabled>Save</button>
+    <button type="button" id="g-load" class="pill small" disabled>Load</button>
+    <button type="button" id="g-clear" class="pill small" disabled>Clear</button>
+    <label>At power-on <select id="g-boot" disabled></select></label>
+    <span class="hint" id="g-store" aria-live="polite"></span>
+  </div>
+
   <div class="gen-row scale-edit" id="g-umask-row" hidden>
     <span class="lbl">Custom scale</span>
     <span id="g-umask" class="notes" role="group" aria-label="Notes in the custom scale"></span>

@@ -2,7 +2,7 @@
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 24 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), all its settings when they change at once (genAll: power-on, Randomize,
 // Defaults), its MIDI OUT as it happens (web_midi_out).
-const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17 };
+const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const gtk = (t, k) => 32 + t * 24 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
@@ -208,6 +208,14 @@ function drawGen(g) {
   const s = { on: g[0], playing: g[1], root: g[2], scale: g[3], llen: g[5], curM: g[6], curT: [g[7], g[8], g[9], g[10]],
               mask: g[11] | g[12] << 8, step: [g[13], g[14], g[15], g[16]], loop: [...g.slice(17, 17 + g[5])] };
   genState = s;
+  if (g.length > 41) {
+    const was = savePending;
+    slotsUsed = g[39];
+    bootMode = g[40];
+    savePending = g[41];
+    if (was && !savePending && storeMsg && !/Stored\./.test(storeMsg)) storeMsg += " Stored.";
+    drawSlots();
+  }
   if (g.length > 37 && document.activeElement !== $("g-macro")) { $("g-macro").value = g[37] - 100; $("g-macro-o").textContent = g[37] - 100; }
   genOn = !!s.on;
   genPlaying = !!s.playing;
@@ -257,6 +265,65 @@ function syncGen(a) {
   }
   cards.forEach((c, t) => c.sync((k) => a[gtk(t, k)]));
 }
+// ---- setups: 8 slots in the FM-1's memory (written once playback stops), and what power-on does
+let slotSel = 1, slotsUsed = 0, bootMode = 0, savePending = 0, storeMsg = "", clearArmed = 0;
+const BOOTS = ["New random setup", "Resume last session"].concat([1, 2, 3, 4, 5, 6, 7, 8].map((n) => `Setup ${n}`));
+opts($("g-boot"), BOOTS, 0);
+for (let n = 1; n <= 8; n++) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = n;
+  b.setAttribute("role", "radio");
+  b.addEventListener("click", () => { slotSel = n; clearArmed = 0; drawSlots(); });
+  $("g-slots").appendChild(b);
+}
+function drawSlots() {
+  [...$("g-slots").children].forEach((b, i) => {
+    const n = i + 1, used = !!(slotsUsed >> i & 1);
+    b.setAttribute("aria-checked", String(n === slotSel));
+    b.classList.toggle("used", used);
+    b.classList.toggle("boot", bootMode === n + 1);
+    b.setAttribute("aria-label", `Setup ${n}${used ? "" : ", empty"}${bootMode === n + 1 ? ", starts at power-on" : ""}`);
+  });
+  const used = !!(slotsUsed >> (slotSel - 1) & 1), live = !$("g-save").dataset.off;
+  $("g-load").disabled = !live || !used;
+  $("g-clear").disabled = !live || !used;
+  $("g-clear").textContent = clearArmed ? `Clear ${slotSel}?` : "Clear";
+  $("g-clear").classList.toggle("confirm", !!clearArmed);
+  [...$("g-boot").options].forEach((o, i) => { o.disabled = i >= 2 && !(slotsUsed >> (i - 2) & 1); });
+  if (document.activeElement !== $("g-boot")) $("g-boot").value = String(bootMode);
+  $("g-store").textContent = savePending ? (genPlaying ? `${storeMsg} It goes into the FM-1's memory when playback stops.` : `${storeMsg} Storing…`)
+                                         : storeMsg;
+}
+drawSlots();
+$("g-save").addEventListener("click", () => {
+  gset(GP.SAVE, slotSel);
+  storeMsg = (slotsUsed >> (slotSel - 1) & 1) ? `Setup ${slotSel} replaced.` : `Saved as setup ${slotSel}.`;
+  savePending = 1;
+  clearArmed = 0;
+  drawSlots();
+});
+$("g-load").addEventListener("click", () => { gset(GP.LOAD, slotSel); storeMsg = `Playing setup ${slotSel}.`; clearArmed = 0; drawSlots(); });
+$("g-clear").addEventListener("click", () => {
+  if (!clearArmed) {                                // a second press within 4 s clears it (no dialog boxes here)
+    clearArmed = setTimeout(() => { clearArmed = 0; drawSlots(); }, 4000);
+    drawSlots();
+    return;
+  }
+  clearTimeout(clearArmed);
+  clearArmed = 0;
+  gset(GP.CLEAR, slotSel);
+  storeMsg = `Setup ${slotSel} cleared.`;
+  savePending = 1;
+  drawSlots();
+});
+$("g-boot").addEventListener("change", (e) => {
+  gset(GP.BOOT, +e.target.value);
+  storeMsg = `At power-on: ${BOOTS[+e.target.value].toLowerCase()}.`;
+  savePending = 1;
+  drawSlots();
+});
+
 $("gen-random").addEventListener("click", () => gset(GP.RANDOM, Math.floor(Math.random() * 0x7fffffff)));
 $("gen-defaults").addEventListener("click", () => gset(GP.DEFAULTS, 1));
 
@@ -301,7 +368,9 @@ async function genMidiPorts() {
 }
 
 function genReady() {
-  for (const id of ["gen-on", "gen-play", "gen-random", "gen-defaults"]) $(id).disabled = false;
+  for (const id of ["gen-on", "gen-play", "gen-random", "gen-defaults", "g-save", "g-boot"]) $(id).disabled = false;
+  delete $("g-save").dataset.off;
+  drawSlots();
   $("gen-hint").textContent = "Each power-on draws a new setup. Press Play here or on the FM-1; Randomize draws another.";
   genMidiPorts();
 }

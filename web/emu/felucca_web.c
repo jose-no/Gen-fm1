@@ -296,6 +296,7 @@ static void web_frame(void)
     master_poll();
     felucca_dbg.ui_frames++;
     ui_input();
+    gen_persist_poll();
     settings_poll();
     autosave_poll();
     ui_leds();
@@ -505,7 +506,7 @@ EXPORT void web_gen(uint32_t id, int32_t v) { gen_set(id, v); }
 EXPORT int32_t web_gen_get(uint32_t id) { return gen_get(id); }
 EXPORT void web_gen_seed(uint32_t seed) { gen_web_seed = seed; }   /* before web_boot: the page's random number */
 static uint8_t web_gen_buf[64];
-/* {on, playing, root, scale, src, llen, cur_m, cur_t[4], mask lo, mask hi, step[4], loop[16], dens[4], macro + 100, ver} */
+/* {on, playing, root, scale, src, llen, cur_m, cur_t[4], mask lo, mask hi, step[4], loop[16], dens[4], macro + 100, ver, slots, boot, pending} */
 EXPORT uint8_t *web_gen_info(void)
 {
     uint32_t i, m = gen.llen ? gen_mask() : 0xAB5u;
@@ -529,6 +530,9 @@ EXPORT uint8_t *web_gen_info(void)
         b[33 + i] = (uint8_t)(gen.llen ? gen_dens(i, gen.pos[i]) : 0u);
     b[37] = (uint8_t)(gen.macro + 100);           /* the MACRO, 0..200 */
     b[38] = gen.ver;                              /* + 1 when the settings change all at once */
+    b[39] = (uint8_t)gen_slots();                 /* the saved setups (bit n: slot n + 1) */
+    b[40] = gen_store.boot;                       /* power-on: 0 RANDOM, 1 LAST, 2.. SETUP 1.. */
+    b[41] = (uint8_t)(gen_dirty || persist_pending);   /* a save waiting to be written (stopped: 1.5 s on) */
     return b;
 }
 /* a USB-MIDI event packet the generator sent (MIDI OUT), 0: none */

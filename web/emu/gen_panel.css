@@ -69,3 +69,14 @@
 @media (prefers-reduced-motion: reduce) { .meter span { transition: none; } }
 .gen label.macro { color: var(--lit); }
 .gen label.macro input[type=range] { accent-color: var(--green); }
+.setups { align-items: center; }
+.slots { display: flex; flex-wrap: wrap; gap: 4px; }
+.slots button { font: 600 13px -apple-system, sans-serif; width: 34px; height: 30px; border-radius: 8px; border: 1px solid var(--edge);
+                background: var(--part); color: #9a9a9e; cursor: pointer; position: relative; font-variant-numeric: tabular-nums; }
+.slots button.used { color: var(--label); }
+.slots button.used::after { content: ""; position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px;
+                            border-radius: 50%; background: var(--lit); }
+.slots button[aria-checked=true] { background: var(--lit); color: #1d1d1f; border-color: var(--lit); }
+.slots button[aria-checked=true].used::after { background: #1d1d1f; }
+.slots button.boot { box-shadow: 0 0 0 2px var(--green); }
+.pill.confirm { background: var(--warn); color: #1d1d1f; border-color: var(--warn); }

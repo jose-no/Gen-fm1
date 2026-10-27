@@ -26,6 +26,14 @@ static void gen_track_setup(uint32_t ti)
     t->p[P_CHRD] = 0;
     t->p[P_AMODE] = 0;                   /* ARP off */
     t->p[P_LEVEL] = ti == GT_DYAD_B ? 88 : ti == GT_MEL ? 92 : 100;
+    if (gen.tk[ti].freeze) {             /* a frozen track keeps its pattern (from a setup: gen_restore put it
+                                          * back); one with no notes in it is unfrozen, or it would never play */
+        for (i = 0; i < gen_len(ti) && t->step[i].time != ST_NOTE; i++)
+            ;
+        if (i < gen_len(ti))
+            return;
+        gen.tk[ti].freeze = 0;
+    }
     for (i = 0; i < NSTEP; i++) {
         memset(&t->step[i], 0, sizeof t->step[i]);
         t->step[i].time = ST_REST;
@@ -41,8 +49,7 @@ static void gen_enable(uint32_t on)
             gen_defaults();
         for (i = 0; i < NPART; i++)
             gen_track_setup(i);
-        gen.regen = 1;
-    }
+    }                                    /* (the progression as it stands: drawn, or restored from a setup) */
     gen.on = (uint8_t)(on != 0u);
 }
 
@@ -156,6 +163,170 @@ static void gen_apply_tracks(void)
         gen_track_setup(i);
 }
 
+/* ------------------------------------------------------------------------- setups --- */
+/* Saved in Felucca's settings record (project.c: persist_t, then this), both of its A/B copies, written only while
+ * the transport is stopped (settings_poll). 8 setups, the last session (kept only while power-on is LAST), and what
+ * power-on does. A setup is everything the generator plays from: its settings, the progression loop as it stands,
+ * the custom scale, the tempo and global swing, the seed, and the patterns of its frozen tracks (a frozen phrase
+ * comes back as it was) */
+#define GEN_STORE_MAGIC 0x314E4547u              /* "GEN1" */
+#define GEN_NSLOT 8u
+enum { GBOOT_RANDOM, GBOOT_LAST, GBOOT_SLOT0 };
+typedef struct {                                 /* a frozen track's pattern: per step its kind and velocity, two notes */
+    uint8_t tv[GEN_STEPS];                       /* ST_* (2 bits) | velocity / 2 (6 bits) << 2 */
+    uint8_t n0[GEN_STEPS], n1[GEN_STEPS];        /* the notes (0: none) */
+} gen_pat_t;
+typedef struct {
+    uint8_t used, root, scale, src, preset, plen, rate, mut, combine, drift, swing, llen;
+    int8_t macro, loop[GEN_LOOP_MAX];
+    uint8_t rsv[3];
+    uint16_t umask;
+    int16_t bpm;
+    uint32_t seed;
+    gen_trk_t tk[NPART];
+    gen_pat_t pat[NPART];                        /* (only a frozen track's is kept) */
+} gen_setup_t;
+typedef struct {
+    uint32_t magic;
+    uint16_t size, rsv0;
+    uint8_t boot, rsv[3];                        /* GBOOT_*: RANDOM, LAST, SETUP n (GBOOT_SLOT0 + n) */
+    gen_setup_t last, slot[GEN_NSLOT];
+} gen_store_t;
+static gen_store_t gen_store;
+static uint8_t gen_dirty, gen_was_playing;       /* a change to write (gen_persist_poll); PLAY seen */
+static uint32_t gen_dirty_ms;
+
+static void gen_capture(gen_setup_t *s)
+{
+    uint32_t i;
+    memset(s, 0, sizeof *s);
+    s->used = 1;
+    s->root = gen.root;
+    s->scale = gen.scale;
+    s->src = gen.src;
+    s->preset = gen.preset;
+    s->plen = gen.plen;
+    s->rate = gen.rate;
+    s->mut = gen.mut;
+    s->combine = gen.combine;
+    s->drift = gen.drift;
+    s->swing = (uint8_t)song.g[G_SWING];
+    s->llen = gen.llen;
+    s->macro = gen.macro;
+    for (i = 0; i < GEN_LOOP_MAX; i++)
+        s->loop[i] = gen.loop[i];
+    s->umask = gen.umask;
+    s->bpm = song.g[G_BPM];
+    s->seed = gen.seed;
+    for (i = 0; i < NPART; i++) {
+        uint32_t k;
+        s->tk[i] = gen.tk[i];
+        if (!gen.tk[i].freeze)
+            continue;
+        for (k = 0; k < GEN_STEPS; k++) {
+            const step_t *st = &trk[i].step[k];
+            s->pat[i].tv[k] = (uint8_t)((st->time & 3u) | ((st->vel >> 1) & 63u) << 2);
+            s->pat[i].n0[k] = st->n ? st->note[0] : 0u;
+            s->pat[i].n1[k] = st->n > 1u ? st->note[1] : 0u;
+        }
+    }
+}
+/* the generator plays from setup s (its tracks are set up by the caller: gen_enable or gen_apply_tracks); a frozen
+ * track gets its saved pattern back */
+static void gen_restore(const gen_setup_t *s)
+{
+    uint32_t i;
+    gen.root = (uint8_t)(s->root % 12u);
+    gen.scale = s->scale > GEN_UMASK_SCALE ? 1u : s->scale;
+    gen.src = (uint8_t)(s->src % GS_COUNT);
+    gen.preset = (uint8_t)(s->preset % GEN_NPRESETS);
+    gen.plen = (uint8_t)gen_lim(s->plen, 2, 8);
+    gen.rate = (uint8_t)(s->rate % GEN_NRATE);
+    gen.mut = (uint8_t)gen_lim(s->mut, 0, 100);
+    gen.combine = (uint8_t)(s->combine % 3u);
+    gen.drift = (uint8_t)gen_lim(s->drift, 0, 100);
+    song.g[G_SWING] = (int16_t)gen_lim(s->swing, 0, 100);
+    gen.macro = s->macro;
+    gen.umask = (uint16_t)(s->umask & 0xFFFu);
+    song.g[G_BPM] = (int16_t)gen_lim(s->bpm, 40, 240);
+    gen.seed = s->seed ? s->seed : 0x6D2B79F5u;
+    for (i = 0; i < NPART; i++) {
+        uint32_t k;
+        gen.tk[i] = s->tk[i];
+        if (!gen.tk[i].freeze)
+            continue;
+        for (k = 0; k < GEN_STEPS; k++) {
+            step_t *st = &trk[i].step[k];
+            uint32_t tv = s->pat[i].tv[k];
+            memset(st, 0, sizeof *st);
+            st->time = (uint8_t)((tv & 3u) <= ST_REST ? tv & 3u : ST_REST);
+            if (st->time == ST_NOTE && s->pat[i].n0[k]) {
+                st->note[0] = s->pat[i].n0[k];
+                st->note[1] = s->pat[i].n1[k];
+                st->n = (uint8_t)(s->pat[i].n1[k] ? 2u : 1u);
+                st->vel = (uint8_t)((tv >> 2) << 1 | 1u);
+                step_set_chance(st, gen.tk[i].chance);
+            } else if (st->time == ST_NOTE) {
+                st->time = ST_REST;
+            }
+        }
+    }
+    if (s->llen >= 2u && s->llen <= GEN_LOOP_MAX) {   /* the progression as it was, not a new one */
+        for (i = 0; i < GEN_LOOP_MAX; i++)
+            gen.loop[i] = (int8_t)gen_wrap_deg(s->loop[i]);
+        gen.llen = s->llen;
+    } else {
+        gen_make_loop(0);
+    }
+    gen.regen = 0;
+    gen.pass = 0;
+    gen.ver++;
+}
+/* power-on (project.c persist_boot): the store from the settings record, or an empty one */
+static void gen_store_import(const gen_store_t *g)
+{
+    if (g && g->magic == GEN_STORE_MAGIC && g->size == sizeof *g) {
+        gen_store = *g;
+        if (gen_store.boot >= GBOOT_SLOT0 + GEN_NSLOT)
+            gen_store.boot = GBOOT_RANDOM;
+    } else {
+        memset(&gen_store, 0, sizeof gen_store);
+    }
+    gen_store.magic = GEN_STORE_MAGIC;
+    gen_store.size = (uint16_t)sizeof gen_store;
+}
+/* before the settings record is written (project.c settings_poll): the last session, when power-on resumes it */
+static void gen_store_export(void)
+{
+    if (gen_store.boot == GBOOT_LAST && gen.on && gen.llen)
+        gen_capture(&gen_store.last);
+}
+static void gen_mark(void)
+{
+    gen_dirty = 1;
+    gen_dirty_ms = fm1_ms;
+}
+static uint32_t gen_slots(void)
+{
+    uint32_t i, m = 0;
+    for (i = 0; i < GEN_NSLOT; i++)
+        m |= (uint32_t)(gen_store.slot[i].used != 0u) << i;
+    return m;
+}
+/* main loop: a change (or, resuming, the end of a play) is written 1.5 s later, once the transport is stopped
+ * (settings_save queues it; settings_poll writes it when nothing plays) */
+static void gen_persist_poll(void)
+{
+    uint8_t playing = (uint8_t)(song.playing != 0u);
+    if (gen_was_playing && !playing && gen_store.boot == GBOOT_LAST)
+        gen_mark();
+    gen_was_playing = playing;
+    if (gen_dirty && (uint32_t)(fm1_ms - gen_dirty_ms) >= 1500u) {
+        gen_dirty = 0;
+        settings_save();
+    }
+}
+
 /* a setting by id (gen_set's), as it is now */
 static int32_t gen_get(uint32_t id)
 {
@@ -207,6 +378,9 @@ static int32_t gen_get(uint32_t id)
     case GP_MACRO: return gen.macro;
     case GP_DRIFT: return gen.drift;
     case GP_SWING: return song.g[G_SWING];
+    case GP_BOOT: return gen_store.boot;
+    case GP_SLOTS: return (int32_t)gen_slots();
+    case GP_PENDING: return gen_dirty;
     default: return 0;
     }
 }
@@ -285,8 +459,36 @@ static void gen_set(uint32_t id, int32_t v)
         gen_apply_tracks();
         gen.regen = 1;
         break;
+    case GP_SAVE:                                 /* SAVE n: the setup as it is now into slot n (1..8) */
+        if (v >= 1 && v <= (int32_t)GEN_NSLOT) {
+            gen_capture(&gen_store.slot[v - 1]);
+            gen_mark();
+        }
+        break;
+    case GP_LOAD:                                 /* LOAD n: play from slot n, if it holds a setup */
+        if (v >= 1 && v <= (int32_t)GEN_NSLOT && gen_store.slot[v - 1].used) {
+            gen_restore(&gen_store.slot[v - 1]);
+            gen_apply_tracks();
+        }
+        break;
+    case GP_CLEAR:
+        if (v >= 1 && v <= (int32_t)GEN_NSLOT) {
+            memset(&gen_store.slot[v - 1], 0, sizeof gen_store.slot[v - 1]);
+            if (gen_store.boot == GBOOT_SLOT0 + (uint32_t)v - 1u)
+                gen_store.boot = GBOOT_RANDOM;   /* (power-on cannot start from an empty slot) */
+            gen_mark();
+        }
+        break;
+    case GP_BOOT:                                 /* what power-on does: RANDOM, LAST, SETUP n */
+        gen_store.boot = (uint8_t)gen_lim(v, 0, GBOOT_SLOT0 + GEN_NSLOT - 1);
+        if (gen_store.boot >= GBOOT_SLOT0 && !gen_store.slot[gen_store.boot - GBOOT_SLOT0].used)
+            gen_store.boot = GBOOT_RANDOM;
+        gen_mark();
+        break;
     default: break;
     }
+    if (gen_store.boot == GBOOT_LAST && id < GP_SAVE)
+        gen_mark();                               /* resuming: every change is kept (written once stopped) */
     if (!song.playing && gen.regen) {
         gen.regen = 0;
         gen_make_loop(0);                /* (stopped: no pass will draw it) */
@@ -294,7 +496,8 @@ static void gen_set(uint32_t id, int32_t v)
 }
 
 /* power-on (main.c, after the last session's music is restored): the generator starts on, its tracks set up and
- * waiting for PLAY, with settings drawn at random (GEN_BOOT_RANDOM=0: the defaults). GEN_BOOT_ON=0 builds a firmware
+ * waiting for PLAY, as the store says: a new random setup (GEN_BOOT_RANDOM=0: the defaults), the last session, or
+ * a saved setup. GEN_BOOT_ON=0 builds a firmware
  * that starts as plain Felucca */
 #ifndef GEN_BOOT_ON
 #define GEN_BOOT_ON 1
@@ -324,7 +527,11 @@ static void gen_boot(void)
     if (!GEN_BOOT_ON)
         return;
     gen_defaults();
-    if (GEN_BOOT_RANDOM)
+    if (gen_store.boot == GBOOT_LAST && gen_store.last.used)
+        gen_restore(&gen_store.last);          /* where the last session left off */
+    else if (gen_store.boot >= GBOOT_SLOT0 && gen_store.slot[gen_store.boot - GBOOT_SLOT0].used)
+        gen_restore(&gen_store.slot[gen_store.boot - GBOOT_SLOT0]);
+    else if (GEN_BOOT_RANDOM)
         gen_randomize(gen_entropy());
     gen.ver++;
     gen_enable(1);

@@ -127,12 +127,12 @@ if (typeof registerProcessor === "function") {
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
       if (ex.web_gen_info) {                          // the generative machine's state, when it changes
-        const g = new Uint8Array(mem, ex.web_gen_info(), 39).slice(), key = g.join(",");
+        const g = new Uint8Array(mem, ex.web_gen_info(), 42).slice(), key = g.join(",");
         if (key !== this.sentGen) { this.sentGen = key; msg.gen = g; }
         if (g[38] !== this.sentGenVer && ex.web_gen_get) {   // all of its settings, when they changed at once
           this.sentGenVer = g[38];
           const all = {};
-          for (let id = 0; id < 16; id++) all[id] = ex.web_gen_get(id);
+          for (let id = 0; id < 32; id++) all[id] = ex.web_gen_get(id);
           for (let t = 0; t < 4; t++) for (let k = 0; k < 20; k++) all[32 + t * 24 + k] = ex.web_gen_get(32 + t * 24 + k);
           msg.genAll = all;
         }

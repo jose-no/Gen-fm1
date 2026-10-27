@@ -31,6 +31,8 @@ enum { GO_BOTH, GO_INT, GO_MIDI };                             /* output */
 enum {
     GP_ON, GP_ROOT, GP_SCALE, GP_UMASK, GP_SRC, GP_PRESET, GP_PLEN, GP_RATE, GP_MUT, GP_COMBINE, GP_BPM, GP_PLAY,
     GP_REGEN, GP_MACRO, GP_DRIFT, GP_SWING, GP_RANDOM, GP_DEFAULTS,
+    GP_SAVE, GP_LOAD, GP_BOOT, GP_CLEAR, GP_SLOTS, GP_PENDING,   /* setups (gen_setup.c): SAVE / LOAD / CLEAR n = 1..8,
+                                                                 * BOOT 0 RANDOM 1 LAST 2.. SETUP 1..; SLOTS, PENDING: read */
     GP_TRK = 32
 };
 enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,

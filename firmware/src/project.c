@@ -1149,6 +1149,15 @@ static void project_load(uint32_t slot)
 #include "slice_store.c"                          /* SLICE's MAN slices, kept in the user slots */
 #endif
 #if FELUCCA_FLASH
+/* the settings record as this firmware writes it: Felucca's settings, then the generator's setups (gen_setup.c).
+ * A record of Felucca's own size (written by Felucca, or before the generator) still loads: the setups start empty */
+typedef struct {
+    persist_t p;
+    gen_store_t g;
+} persist_gen_t;
+_Static_assert(sizeof(persist_gen_t) <= ST_PAYLOAD_MAX, "settings and setups do not fit one flash sector");
+static persist_gen_t persist_wire __attribute__((section(".pool")));
+static gen_store_t gen_store_saved __attribute__((section(".pool")));
 static persist_t persist_saved __attribute__((section(".pool")));
 static uint8_t persist_pending;                 /* 1 requested, 2 waiting after a flash error */
 static uint32_t persist_retry_ms;
@@ -1174,9 +1183,17 @@ static void persist_boot(void)                    /* before settings_init / pane
             smp_user_scan(k);
     }
     {
-        int n = st_load(OBJ_SETTINGS, &p, sizeof p);
+        int n = st_load(OBJ_SETTINGS, &persist_wire, sizeof persist_wire);
+        if (n == (int)sizeof persist_wire) {      /* with the generator's setups */
+            gen_store_import(&persist_wire.g);
+            n = (int)sizeof persist_wire.p;
+        } else {
+            gen_store_import(0);
+        }
+        p = persist_wire.p;
         if (settings_import(&p, n))
             persist_saved = p;
+        gen_store_saved = gen_store;
     }
     {   /* projects: fill empty RAM slots from flash, so the slot list is right after power-on */
         uint32_t i;
@@ -1251,12 +1268,16 @@ static void settings_poll(void)
         return;
     p = persist_saved;
     settings_export(&p);
-    if (!memcmp(&p, &persist_saved, sizeof p)) {
+    gen_store_export();                            /* the generator's last session, when power-on resumes it */
+    if (!memcmp(&p, &persist_saved, sizeof p) && !memcmp(&gen_store, &gen_store_saved, sizeof gen_store)) {
         persist_pending = 0;
         return;                                    /* unchanged: no erase cycle */
     }
-    if (st_save(OBJ_SETTINGS, &p, sizeof p) == 0) {
+    persist_wire.p = p;
+    persist_wire.g = gen_store;
+    if (st_save(OBJ_SETTINGS, &persist_wire, sizeof persist_wire) == 0) {
         persist_saved = p;
+        gen_store_saved = gen_store;
         persist_pending = 0;
     } else {
         persist_pending = 2;

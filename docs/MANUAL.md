@@ -20,7 +20,25 @@ Every power-on draws a new setup, so the FM-1 starts somewhere different each ti
 - **Densities** 25–75. About half the tracks get a density mod; a quarter get an odd length (5–14 steps); a third get some drift or a chance below 100 %. The bass is usually locked to the master chords.
 - **Not drawn:** each track's output (synth, MIDI or both) stays as you set it, and freeze, mute and the macro start off.
 
-On the web page, **Randomize** draws a new setup at any time, even while it plays, and **Defaults** returns to the settings this manual lists. Once settings can be saved, you'll be able to keep a setup you like.
+On the web page, **Randomize** draws a new setup at any time, even while it plays, and **Defaults** returns to the settings this manual lists. To keep a setup you like, save it (next section).
+
+## Saving setups
+
+The FM-1 keeps 8 setups. A setup is everything the generator plays from: every setting on the page, the progression as it stands, the custom scale, the tempo and swing, and the patterns of any frozen tracks, so a phrase you froze comes back note for note.
+
+| Control | What it does |
+| --- | --- |
+| 1–8 | Pick a slot. A dot marks a slot that holds a setup; a green ring marks the one power-on starts from |
+| Save | Saves what plays now into the slot, replacing what was there |
+| Load | Plays from the slot's setup straight away, even while playing |
+| Clear | Empties the slot. Press it twice: the first press asks |
+| At power-on | **New random setup** (the default), **Resume last session** (everything as it was when you last stopped), or **Setup 1–8** (always start from that setup) |
+
+**When it is stored.** Writing to the FM-1's memory briefly pauses the chip, so, like Felucca's own settings, saves are only written while nothing plays. A save made during playback is kept and written 1.5 seconds after you stop. The line beside the controls says when it's stored. With **Resume last session**, your changes are kept the same way, each time playback stops.
+
+Setups are kept in the same flash record as Felucca's own settings, which has two copies, so a power cut while saving cannot lose them. If you ever reinstall plain Felucca, it won't recognise the larger record and will reset its own display preferences once. Your setups are only lost if Felucca then saves its settings over them.
+
+On the web page, setups are kept in your browser, as Felucca's web page keeps its saves.
 
 ## How it works
 
@@ -156,6 +174,7 @@ MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the track
 - **Slow harmony, busy parts:** set the master rate to 4 or 8 bars, raise the melody's density, and set dyad B to ×½ so it moves twice as often as the master.
 - **One-knob build:** set the macro weights to Dyad A 30, Dyad B 60, Bass 20 and Melody 100, start the macro at −100 and bring it up over a few minutes, so the melody arrives last and the bass barely moves. Map it to a knob on a controller with CC 16.
 - **Human feel:** give the melody a drift of about 30 and the bass 10, with a global swing of 20. For a looser, half-asleep feel, raise the global drift instead.
+- **Keep a good accident:** when a random power-on lands somewhere you like, press Save. Set At power-on to that setup to start there every time, or leave it on random and Load it when you want it.
 - **Loose loops:** freeze a melody you like and set its chance to about 70 %, so the phrase stays recognisable but drops different notes each time.
 - **Breathing parts:** give the melody a Sine density mod over 8 bars and the dyads a Square over 4, so the parts take turns being busy.
 - **Shifting patterns:** give the melody 5 or 7 steps and the bass 12, so the parts line up differently every bar.
@@ -166,5 +185,5 @@ MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the track
 ## Limits of this version
 
 - No controls on the FM-1's own screen yet. Settings are made on the web page.
-- Settings are not saved yet: every power-on draws a new setup, and replaces the patterns Felucca kept from the last session.
+- The generator replaces the patterns Felucca kept from its last session at every power-on; the generator's own setups are kept as described in [Saving setups](#saving-setups).
 - Not yet tested on a real FM-1.
