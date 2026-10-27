@@ -119,3 +119,15 @@ static void gen_set(uint32_t id, int32_t v)
         gen_make_loop(0);                /* (stopped: no pass will draw it) */
     }
 }
+
+/* power-on (main.c, after the last session's music is restored): the generator starts on, its tracks set up and
+ * waiting for PLAY. GEN_BOOT_ON=0 builds a firmware that starts as plain Felucca */
+#ifndef GEN_BOOT_ON
+#define GEN_BOOT_ON 1
+#endif
+static void gen_boot(void)
+{
+    if (GEN_BOOT_ON)
+        gen_enable(1);
+}
+

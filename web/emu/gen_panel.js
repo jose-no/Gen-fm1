@@ -255,7 +255,7 @@ async function genMidiPorts() {
 function genReady() {
   $("gen-on").disabled = false;
   $("gen-play").disabled = false;
-  $("gen-hint").textContent = "Press On to start the generator playing. The FM-1 panel works too: SEQ shows the patterns being written.";
+  $("gen-hint").textContent = "The generator is on from power-on: press Play here or on the FM-1. SEQ on the FM-1 shows the patterns being written.";
   gset(GP.BPM, +$("g-bpm").value);
   genMidiPorts();
 }

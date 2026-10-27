@@ -289,5 +289,20 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
         hon.length > 100 && bad === 0 && left === 0 && hon.every((e) => MAJ.has(e.n % 12)));
 }
 
+// power-on: the generator is on by itself; the FM-1's own PLAY button starts it
+{
+  const p = await device();
+  p.render(1500);
+  const info = new Uint8Array(p.mem.buffer, p.ex.web_gen_info(), 38);
+  const onAtBoot = info[0], loopAtBoot = info[5];
+  p.ex.web_buttons(1 << 10);                                 // PLAY on the panel
+  p.render(80);
+  p.ex.web_buttons(0);
+  p.render(4000);
+  const chans = new Set(p.midi.filter((e) => (e.st & 0xf0) === 0x90).map((e) => e.st & 15));
+  check(`power-on: generator on (${onAtBoot}), a loop of ${loopAtBoot} chords; the panel's PLAY plays all ${chans.size} tracks`,
+        onAtBoot === 1 && loopAtBoot >= 2 && chans.size === 4 && p.peak > 0.02);
+}
+
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");
 process.exit(fails ? 1 : 0);
