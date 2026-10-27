@@ -189,7 +189,9 @@ typedef struct {
 typedef struct {
     uint32_t magic;
     uint16_t size, rsv0;
-    uint8_t boot, rsv[3];                        /* GBOOT_*: RANDOM, LAST, SETUP n (GBOOT_SLOT0 + n) */
+    uint8_t boot;                                /* GBOOT_*: RANDOM, LAST, SETUP n (GBOOT_SLOT0 + n) */
+    uint8_t a440;                                /* the tuning: 0 A = 432 Hz (the default), 1 A = 440 Hz */
+    uint8_t rsv[2];
     gen_setup_t last, slot[GEN_NSLOT];
 } gen_store_t;
 static gen_store_t gen_store;
@@ -289,6 +291,7 @@ static void gen_store_import(const gen_store_t *g)
         gen_store = *g;
         if (gen_store.boot >= GBOOT_SLOT0 + GEN_NSLOT)
             gen_store.boot = GBOOT_RANDOM;
+        gen_store.a440 = (uint8_t)(gen_store.a440 == 1u);
     } else {
         memset(&gen_store, 0, sizeof gen_store);
     }
@@ -301,6 +304,12 @@ static void gen_store_export(void)
     if (gen_store.boot == GBOOT_LAST && gen.on && gen.llen)
         gen_capture(&gen_store.last);
 }
+/* the tuning, as Felucca's TUNE (G_TUNE, cents, the same as MENU > AUDIO > TUNE): A = 432 Hz is 31.77 cents below 440;
+ * -32 cents is A = 431.94 Hz, as near as the engines' fine pitch (0.42 cents a step) comes. Not part of a setup: it
+ * is the instrument's, kept with the store, set at power-on (after the session's music, whose TUNE it replaces) */
+#define GEN_TUNE_432 (-32)
+static void gen_tune_apply(void) { song.g[G_TUNE] = (int16_t)(gen_store.a440 ? 0 : GEN_TUNE_432); }
+
 static void gen_mark(void)
 {
     gen_dirty = 1;
@@ -381,6 +390,7 @@ static int32_t gen_get(uint32_t id)
     case GP_BOOT: return gen_store.boot;
     case GP_SLOTS: return (int32_t)gen_slots();
     case GP_PENDING: return gen_dirty;
+    case GP_TUNE: return gen_store.a440 ? 440 : 432;
     default: return 0;
     }
 }
@@ -479,6 +489,11 @@ static void gen_set(uint32_t id, int32_t v)
             gen_mark();
         }
         break;
+    case GP_TUNE:                                 /* A = 432 Hz or 440 Hz */
+        gen_store.a440 = (uint8_t)(v == 440);
+        gen_tune_apply();
+        gen_mark();
+        break;
     case GP_BOOT:                                 /* what power-on does: RANDOM, LAST, SETUP n */
         gen_store.boot = (uint8_t)gen_lim(v, 0, GBOOT_SLOT0 + GEN_NSLOT - 1);
         if (gen_store.boot >= GBOOT_SLOT0 && !gen_store.slot[gen_store.boot - GBOOT_SLOT0].used)
@@ -534,6 +549,7 @@ static void gen_boot(void)
     else if (GEN_BOOT_RANDOM)
         gen_randomize(gen_entropy());
     gen.ver++;
+    gen_tune_apply();
     gen_enable(1);
 }
 

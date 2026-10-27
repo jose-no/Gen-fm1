@@ -11,7 +11,7 @@ const bytes = fs.readFileSync(process.argv[2] || "build/emu/felucca.wasm");
 let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
-             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23 };
+             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23, TUNE: 24 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const tk = (t, k) => 32 + t * 24 + k;
 
@@ -461,6 +461,44 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
   const per = (x) => x.split(",").length;
   check(`a frozen 8-step melody saved in setup 1: after a power cycle it plays the same phrase (${per(phrase)} notes a bar)`,
         phrase.length > 0 && g2.ex.web_gen_get(tk(3, GK.FREEZE)) === 1 && (again.includes(phrase.split(",").slice(0, 4).join(",")) || again === phrase));
+}
+
+// TUNING: A4 measured from the audio of a fresh FM-1 each time (the ORGAN patch, its vibrato synced to the note, so
+// the readings repeat; autocorrelation over ten periods): A = 432 by default, 440 when chosen, the interval between
+// them 32 cents (31.77 for 432 exactly); the choice kept through RANDOM, setups and a power cycle
+{
+  const pitch = async (opt) => {
+    const d = await device(opt);
+    d.render(1200);
+    if (opt.tune) d.ex.web_gen(GP.TUNE, opt.tune);
+    d.ex.web_gen(tk(0, GK.PATCH), 6);
+    d.ex.web_gen(GP.ON, 0);                                  // the generator off: track 1 is just the synth
+    d.render(300);
+    d.ex.web_midi(0x90, 69, 100);                            // A4 on channel 1
+    d.render(1200, true);
+    const x = d.audio.slice(13230, 13230 + 26000);
+    const ac = (L) => { let a = 0, n = x.length - 1100; for (let i = 0; i < n; i++) a += x[i] * x[i + L]; return a; };
+    const near = (L0, w) => { let b = -Infinity, lag = 0; for (let L = L0 - w; L <= L0 + w; L++) { const a = ac(L); if (a > b) { b = a; lag = L; } }
+      const y0 = ac(lag - 1), y2 = ac(lag + 1); return lag + 0.5 * (y0 - y2) / (y0 - 2 * b + y2); };
+    d.f = 10 * 44100 / near(Math.round(10 * near(100, 6)), 3);
+    return d;
+  };
+  const cents = (f, ref) => 1200 * Math.log2(f / ref);
+  const a = await pitch({}), b = await pitch({ tune: 440 });
+  check(`tuning: A4 ${a.f.toFixed(2)} Hz by default, ${b.f.toFixed(2)} Hz at A = 440; ${cents(b.f, a.f).toFixed(1)} cents apart`,
+        a.ex.web_gen_get(GP.TUNE) === 432 && b.ex.web_gen_get(GP.TUNE) === 440 && Math.abs(cents(a.f, 432)) < 1.5 &&
+        Math.abs(cents(b.f, 440)) < 1.5 && Math.abs(cents(b.f, a.f) - 32) < 1.5);
+  const t = await device();
+  t.render(1200);
+  t.ex.web_gen(GP.TUNE, 440);
+  t.ex.web_gen(GP.RANDOM, 3);
+  t.ex.web_gen(GP.SAVE, 2);
+  t.ex.web_gen(GP.LOAD, 2);
+  t.ex.web_gen(GP.DEFAULTS, 1);
+  t.render(3000);
+  const u = await pitch({ sectors: storeSectors(new Uint8Array(t.mem.buffer, t.ex.web_nor(), t.ex.web_nor_size())), keep: true, seed: 5 });
+  check(`A = 440 chosen, then RANDOM, SAVE, LOAD, DEFAULTS and a power cycle: still A = 440 (${u.f.toFixed(2)} Hz)`,
+        t.ex.web_gen_get(GP.TUNE) === 440 && u.ex.web_gen_get(GP.TUNE) === 440 && Math.abs(cents(u.f, b.f)) < 0.2);
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");

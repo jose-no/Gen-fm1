@@ -57,6 +57,7 @@ The generator writes each step into the track's Felucca pattern just before the 
 | Control | Range | What it does |
 | --- | --- | --- |
 | Tempo | 40–240 BPM | The tempo, shared with the FM-1's own |
+| Tuning | A = 432 Hz or A = 440 Hz | The pitch every track is tuned to. 432 is the default. It belongs to the instrument, not to a setup: Randomize, Defaults and loading a setup leave it alone, and the FM-1 keeps it through power-off (see below) |
 | Key | C to B | The root note of the scale |
 | Scale | 16 built in, or Custom | The notes the chords and melody use |
 | Progression | 8 sources | How the chord loop is made (below) |
@@ -160,6 +161,12 @@ The melody remembers its shape relative to the chord, so a phrase moves with the
 | Density | How many steps play. Beats are more likely to play than off-beats |
 | Leaps | The chance of a jump of several notes instead of a step |
 | Rests | How often the melody falls silent, instead of playing or holding a note |
+
+## Tuning
+
+Gen-FM1 tunes to A = 432 Hz unless you choose 440. It uses Felucca's master tune (MENU > AUDIO > TUNE on the FM-1), set to −32 cents: A sounds at 431.94 Hz, as close to 432 as the FM engine's fine pitch steps allow, a quarter of a cent away. Felucca's MENU > TUNE still works for the session, and the generator's choice applies again at the next power-on.
+
+**External synths.** MIDI notes carry no tuning. A synth you drive from the FM-1's MIDI out plays at its own tuning, so set it to A = 432 Hz too (often called master tune or calibration), or it will sound 32 cents apart from the FM-1.
 
 ## MIDI
 

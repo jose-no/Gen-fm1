@@ -14,6 +14,7 @@ Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuros
 
 - **A new start every time:** each power-on draws a fresh setup (key, scale, tempo, progression, sounds, rhythms, densities) within musical ranges, and the generator is ready to play. Randomize and Defaults buttons on the web page do the same at any time.
 - **Saved setups:** 8 slots in the FM-1's memory, frozen phrases included. Power-on can start random, resume the last session, or start from a saved setup.
+- **Tuning:** A = 432 Hz by default, or 440.
 - **Harmony:** pick a key and a scale (16 built in, or your own), and a progression source: fixed, random walk, weighted rules, functional harmony, circle of fifths, voice-leading, pendulum, or pedal. The progression is a loop of 2 to 8 chords.
 - **Chord timing:** a master rate from ½ bar to 32 bars. Each track walks the progression at the master rate times its own multiplier (×¼ to ×8), or follows the master chord exactly with harmony lock.
 - **Mutation:** one control for how much the patterns and progression change from pass to pass. At 0 every track repeats its bar, re-voiced onto each new chord. Freeze stops a track changing at all.

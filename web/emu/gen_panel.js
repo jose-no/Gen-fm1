@@ -2,7 +2,7 @@
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 24 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), all its settings when they change at once (genAll: power-on, Randomize,
 // Defaults), its MIDI OUT as it happens (web_midi_out).
-const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23 };
+const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23, TUNE: 24 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const gtk = (t, k) => 32 + t * 24 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
@@ -49,6 +49,7 @@ $("g-plen").addEventListener("change", (e) => gset(GP.PLEN, +e.target.value + 2)
 bindSel("g-rate", GP.RATE);
 bindSel("g-combine", GP.COMBINE);
 $("g-bpm").addEventListener("change", (e) => { const v = Math.min(240, Math.max(40, +e.target.value || 120)); e.target.value = v; gset(GP.BPM, v); });
+$("g-tune").addEventListener("change", (e) => gset(GP.TUNE, +e.target.value));
 $("g-mut").addEventListener("input", (e) => { $("g-mut-o").textContent = e.target.value; gset(GP.MUT, +e.target.value); });
 $("g-regen").addEventListener("click", () => gset(GP.REGEN, 1));
 for (const [k, gp] of [["g-drift", GP.DRIFT], ["g-swing", GP.SWING]])
@@ -259,6 +260,7 @@ function syncGen(a) {
   $("g-rate").value = a[GP.RATE];
   $("g-combine").value = a[GP.COMBINE];
   $("g-bpm").value = a[GP.BPM];
+  if (a[GP.TUNE]) $("g-tune").value = String(a[GP.TUNE]);
   for (const [id, gp] of [["g-mut", GP.MUT], ["g-drift", GP.DRIFT], ["g-swing", GP.SWING], ["g-macro", GP.MACRO]]) {
     $(id).value = a[gp];
     $(id + "-o").textContent = a[gp];
