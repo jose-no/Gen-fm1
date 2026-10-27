@@ -25,6 +25,8 @@
  *              lane's CLEAR REVERSE FILL RANDOM), black keys 1..8 the lane (DRUM); KNOB 1..4 LEN DIV SWING GATE (the
  *              PATTERN page's up to 1.1.5: the page is gone, they are here; EUCLID open: HITS STEPS ROT, OCT+ applies,
  *              OCT- cancels). Each action one undo (SAVE held), OCT- the track as the layer opened (tl_open)
+ *   ARP  SET   (Gen-FM1) the generator: any key, its note name is the generator's KEY; KNOB 1..4 KEY SCALE MUT MACRO;
+ *              OCT+ a new random setup; OCT- puts back the generator as the layer opened (ui_gen.c gen_ly_*)
  *   REC  SET   (1.1.5, on every page; REC's tap still arms / disarms) the white keys from F3: CLEAR (the selected
  *              track's steps and automation, no dialog: one undo, SAVE held), CLICK (OFF REC ON), COUNT-IN (OFF 1 BAR
  *              2 BARS), CLICK LEVEL (LOW MID HIGH), each press the next value; KNOB 1..3 the same three. The settings
@@ -64,13 +66,15 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
+    {B_ARP, LK_SET, FAM_ARP, "[ARP] GEN", {{KC_KEYS, "KEY"}, {KC_OCTUP, "RANDOM"}, {KC_ARP, "DONE"}}},
 };
-static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
+static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC, KC_ARP};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
 static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}};
-static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : 0; }
+static const page_t LY_GEN = {"GEN", FAM_ARP, SC_GEN, GR_GEN, {GP_ROOT, GP_SCALE, GP_MUT, GP_MACRO}};
+static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : l == LAYER_GEN ? &LY_GEN : 0; }
 #define LY_OPEN 2u                     /* ui.ly_t0: the map opened (no tap any more) */
 #define LY_COMBO 4u                    /* .. by a combo */
 #define LY_DEAD 8u                     /* .. pressed where there is no layer: does nothing */
@@ -257,6 +261,8 @@ static void layer_opened(uint32_t l)
     memcpy(lys.mute, drum_mute, sizeof lys.mute);
     if (l == LAYER_REC)
         lys.v[0] = ui_rec_prefs;
+    if (l == LAYER_GEN)
+        gen_ly_open();                                  /* (the generator as it is now: OCT- puts it back) */
 }
 
 /* the armed button: 0, or the layer whose button was tapped (let go) */
@@ -652,6 +658,8 @@ static void layer_key(uint32_t l, uint32_t k)
         }
     } else if (l == LAYER_SCL) {
         TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);    /* the key's note name (F3 = F) */
+    } else if (l == LAYER_GEN) {
+        gen_ly_key(k);                                  /* the generator's KEY (ui_gen.c) */
     } else if (l == LAYER_EDIT && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
             edit_load(eng_vis(p), 0);
@@ -810,6 +818,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 lys.cook = 0;
                 ui_message(lys.l == LAYER_REC ? "REC PUT BACK" : "SEQUENCE PUT BACK");
             }
+        } else if (lys.l == LAYER_GEN) {
+            gen_ly_putback();
         } else if (lys.l == LAYER_GLO) {
             for (k = 0; k < NTRK; k++) {
                 trk[k].p[P_MUTE] = lys.v[k];
@@ -825,6 +835,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
             ui_message("SCALE PUT BACK");
         }
     }
+    if ((mine & 2u) && lys.l == LAYER_GEN)             /* ARP: OCT+ a new random setup */
+        gen_ly_random();
     lys.oct &= (uint8_t)(((fm1_in.buttons >> dn) & 1u) | ((fm1_in.buttons >> up) & 1u) << 1);
     return oct & ~mine;
 }
@@ -853,6 +865,10 @@ static uint32_t layer_leds(uint32_t *br)
             e = (k + 5u + 12u - root) % 12u;
             on = e == 0u;
             can = (mask >> e) & 1u;
+        } else if (l == LAYER_GEN) {                    /* the generator's: its key lit, its scale's notes breathe */
+            e = (k + 5u + 12u - gen.root % 12u) % 12u;
+            on = e == 0u;
+            can = (gen_mask() >> e) & 1u;
         } else if (l == LAYER_EDIT && !b) {             /* the engine lit, the others and INIT breathe */
             on = p < NENG_SHOWN && p < LY_INIT && eng_vis(p) == TSEL->eng_req % NENGINES;
             can = p < NENG_SHOWN && p < LY_INIT ? 1u : (p == LY_INIT || p == LY_CLEAN) && !chain_busy();
@@ -1245,6 +1261,8 @@ static void draw_layer(void)
                (uint32_t)(trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 131u;
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
+    else if (l == LAYER_GEN)
+        sig += gen_graph_sig(GR_GEN) * 31u;
     else if (l == LAYER_REC)
         sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
@@ -1268,6 +1286,8 @@ static void draw_layer(void)
             layer_seq();
         else if (l == LAYER_REC)
             layer_rec();
+        else if (l == LAYER_GEN)
+            gen_ly_map();
         else
             layer_edit();
         cv_blit(0, Y_GRAPH);

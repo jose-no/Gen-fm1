@@ -226,7 +226,8 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
-       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND };
+       CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
+       CF_GEN_SAVE, CF_GEN_CLEAR, CF_GEN_DEFAULTS };   /* the generator (ui_gen.c): replace a setup, clear one, DEFAULTS */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -392,7 +393,7 @@ static uint32_t large_kind(void)
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
-           g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
+           g == GR_SLICES || g == GR_EVENTS || g == GR_GENSET ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -413,7 +414,7 @@ static int32_t ink_w(const aafont_t *f, const char *s)
 }
 
 /* the quick layers (ui_layer.c): a button held, the keys and KNOB 1..4 are its shortcuts, its map over the page */
-enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_N };
+enum { LAYER_NONE, LAYER_FX, LAYER_GLO, LAYER_SCL, LAYER_EDIT, LAYER_SEQ, LAYER_REC, LAYER_GEN, LAYER_N };
 static void draw_layer(void);
 static const char *layer_head(void);
 static int layer_locked(void);
@@ -425,6 +426,8 @@ static uint32_t layer_btn(void);
  * track's (its patch's operators, ui_fm6op.c) */
 static int page_visible(uint32_t i)
 {
+    if (PAGES[i].fam == FAM_ARP && PAGES[i].scope != SC_GEN)   /* ARP's own pages: not while the generator runs (its */
+        return !gen.on;                                       /* tracks have no ARP) */
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
@@ -1782,6 +1785,8 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return slice_page_ok() ? 12u : 0u;       /* SPLIT JOIN (a SLICE track only) */
     if (pg->graph == GR_SLOTS)
         return 14u;                              /* PROJECT: ERASE (1.5.5, #199) LOAD SAVE */
+    if (pg->graph == GR_GENSET || pg->graph == GR_GENACT)
+        return gen_act_cols(pg->graph);          /* SETUPS: CLEAR LOAD SAVE; POWER ON: RANDOM DEFAULTS (ui_gen.c) */
     if (pg->scope == SC_GLOBAL)
         for (c = 0; c < 4u; c++)
             if (go_id(pg->id[c]))
@@ -1816,6 +1821,8 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return c == 3u ? "JOIN" : "SPLIT";
     if (cur_page()->graph == GR_SLOTS && (c & 3u) == 1u)
         return "ERASE";
+    if (cur_page()->graph == GR_GENSET || cur_page()->graph == GR_GENACT)
+        return gen_act_name(c & 3u);
     return id == G_CLRSEQ ? "CLEAR" : id == G_INITSND ? "INIT" : id == G_LOAD ? "LOAD" : "SAVE";
 }
 
@@ -1840,6 +1847,8 @@ static int act_ready(void)
     if (cur_page()->graph == GR_SLICES)
         return slice_act_ready(c);
 #endif
+    if (cur_page()->graph == GR_GENSET || cur_page()->graph == GR_GENACT)
+        return gen_act_ready(c);
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PROJECT ERASE: a used slot, stopped */
         return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
     id = cur_page()->id[c & 3u];

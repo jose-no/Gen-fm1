@@ -1046,6 +1046,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     *vp = (int16_t)v;
+    if (pg->scope == SC_GEN) {                            /* the generator's: through gen_set (ui_gen.c) */
+        gen_ui_commit(vp);
+        return;
+    }
     if (pg->scope != SC_GLOBAL) {
         motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
         ml_knob(TSEL, (uint32_t)(vp - TSEL->p));        /* (MIDI LEARN: picked) */
@@ -1076,6 +1080,10 @@ static void act_do(void)
     if (cur_page()->graph == GR_SONG) {
         if (song.playing || chain_busy() || seq_counting()) transport_req = 2;
         else chain_play_ui();
+        return;
+    }
+    if (cur_page()->graph == GR_GENSET || cur_page()->graph == GR_GENACT) {   /* the generator's (ui_gen.c) */
+        gen_act_do(c);
         return;
     }
     if (cur_page()->graph == GR_PATS) {
@@ -1622,6 +1630,8 @@ static void ui_input(void)
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
+            } else if (kind == CF_GEN_SAVE || kind == CF_GEN_CLEAR || kind == CF_GEN_DEFAULTS) {
+                gen_confirm_do(kind, ui.confirm_trk);
             } else if (kind == CF_LOAD_PAT) {
                 pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
                 str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);

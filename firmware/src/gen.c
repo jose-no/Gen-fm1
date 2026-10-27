@@ -27,16 +27,7 @@ enum { GB_ROOT, GB_R5, GB_WALK, GB_OCT };                      /* bass patterns 
 enum { GM_CHORD, GM_SCALE, GM_PASS };                          /* melody note pools */
 enum { GO_BOTH, GO_INT, GO_MIDI };                             /* output */
 
-/* parameter ids (web_gen / the UI): globals, then 16 per track from GP_TRK */
-enum {
-    GP_ON, GP_ROOT, GP_SCALE, GP_UMASK, GP_SRC, GP_PRESET, GP_PLEN, GP_RATE, GP_MUT, GP_COMBINE, GP_BPM, GP_PLAY,
-    GP_REGEN, GP_MACRO, GP_DRIFT, GP_SWING, GP_RANDOM, GP_DEFAULTS,
-    GP_SAVE, GP_LOAD, GP_BOOT, GP_CLEAR, GP_SLOTS, GP_PENDING, GP_TUNE,   /* TUNE: A = 432 or 440 (Hz) */   /* setups (gen_setup.c): SAVE / LOAD / CLEAR n = 1..8,
-                                                                 * BOOT 0 RANDOM 1 LAST 2.. SETUP 1..; SLOTS, PENDING: read */
-    GP_TRK = 32
-};
-enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,
-       GK_LEN, GK_DMSRC, GK_DMRATE, GK_DMDEPTH, GK_WEIGHT, GK_CHANCE, GK_DRIFT, GK_SWING, GK_N = 24 };
+/* parameter ids: gen_ids.h (params.c includes it: the GEN pages name them) */
 
 /* the master rate: steps (1/16) per chord, 1/2 bar .. 32 bars, odd lengths too */
 static const uint16_t GEN_RATE[] = {8, 16, 32, 48, 64, 80, 96, 112, 128, 192, 256, 384, 512};

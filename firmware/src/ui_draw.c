@@ -1478,6 +1478,11 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);                               /* the sound stored there */
         break;
+    case CF_GEN_SAVE:
+    case CF_GEN_CLEAR:
+    case CF_GEN_DEFAULTS:
+        gen_confirm_text(ui.confirm, k, a, b);       /* (ui_gen.c) */
+        break;
     case CF_ERASE_PROJ:                              /* 1.5.5 (#199): the project's name under it */
         str_cpy(a, "ERASE PROJECT A?", 24);
         a[14] = (char)('A' + (k & 3u));

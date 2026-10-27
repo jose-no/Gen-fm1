@@ -1221,6 +1221,8 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    if (pg->scope == SC_GEN)                         /* the generator's: what its graph shows (ui_gen.c) */
+        h = (h ^ gen_graph_sig(pg->graph)) * 16777619u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -2328,6 +2330,13 @@ static void draw_graph(void)
         case GR_TOOLS:
             cv_oy = 0;
             panel_note("TURN TO PICK", "[OCT+] CONFIRM", 0);
+            break;
+        case GR_GEN:
+        case GR_GENTRK:
+        case GR_GENSET:
+        case GR_GENACT:
+            cv_oy = 0;
+            gen_graph(pg->graph, t);                 /* the generator's (ui_gen.c) */
             break;
 #if FELUCCA_SLICE
         case GR_SLICES:

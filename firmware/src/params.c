@@ -431,10 +431,18 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 /* ------------------------------------------------------------ pages --- */
 enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE, FAM_ARP, FAM_SEQ, FAM_TRK,
        FAM_COUNT };
-enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
+enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK,      /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
+       SC_GEN };                                            /* the generator's settings (ui_gen.c gen_ui_desc) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS };   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS,     /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_GEN, GR_GENTRK, GR_GENSET, GR_GENACT };   /* the generator's pages (ui_gen.c): the progression, the track's
+                                                     * pattern, SETUPS, POWER ON */
+#include "gen_ids.h"
+/* the GEN pages' ids (SC_GEN): a global setting by its GP_* id; the selected track's by GK_* | GEN_T; the ones a track
+ * has or not (RHYTHM: the dyads, LEAP: the melody; REST: the melody); the SETUPS page's slot and the actions */
+#define GEN_T 0x40u
+enum { GEN_U_RHYLEAP = 0x60, GEN_U_REST, GEN_U_SLOT = 0x70, GEN_U_CLEAR, GEN_U_LOAD, GEN_U_SAVE, GEN_U_RANDOM, GEN_U_DEFAULTS };
 
 typedef struct {
     const char *title;
@@ -486,6 +494,20 @@ static const page_t PAGES[] = {
                                                                              * the tap after PRESETS (up to 1.1.5 SEQ's) */
     {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_TOOLS, {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
+    /* the generator's setups (Gen-FM1, ui_gen.c): SLOT, then CLEAR LOAD SAVE picked by their knobs, OCT+ does it; then
+     * what power-on does, RANDOM and DEFAULTS (picked, OCT+), the generator on or off */
+    {"SETUPS", FAM_SAVE, SC_GEN, GR_GENSET, {GEN_U_SLOT, GEN_U_CLEAR, GEN_U_LOAD, GEN_U_SAVE}},
+    {"POWER ON", FAM_SAVE, SC_GEN, GR_GENACT, {GP_BOOT, GEN_U_RANDOM, GEN_U_DEFAULTS, GP_ON}},
+    /* ARP's taps (Gen-FM1): the generator first (ui_gen.c), then ARP's own pages (hidden while the generator runs:
+     * its tracks have no ARP) */
+    {"GEN", FAM_ARP, SC_GEN, GR_GEN, {GP_ROOT, GP_SCALE, GP_SRC, GP_PLEN}},
+    {"GEN", FAM_ARP, SC_GEN, GR_GEN, {GP_RATE, GP_MUT, GP_MACRO, GP_COMBINE}},
+    {"GEN", FAM_ARP, SC_GEN, GR_GEN, {GP_DRIFT, GP_SWING, GP_PRESET, GP_TUNE}},
+    {"TRACK", FAM_ARP, SC_GEN, GR_GENTRK, {GEN_T | GK_PATCH, GEN_T | GK_MODE, GEN_U_RHYLEAP, GEN_T | GK_DENS}},
+    {"TRACK", FAM_ARP, SC_GEN, GR_GENTRK, {GEN_T | GK_LEN, GEN_T | GK_MULT, GEN_T | GK_LOCK, GEN_T | GK_OCT}},
+    {"TRACK", FAM_ARP, SC_GEN, GR_GENTRK, {GEN_T | GK_CHANCE, GEN_T | GK_DRIFT, GEN_T | GK_SWING, GEN_T | GK_WEIGHT}},
+    {"TRACK", FAM_ARP, SC_GEN, GR_GENTRK, {GEN_T | GK_DMSRC, GEN_T | GK_DMRATE, GEN_T | GK_DMDEPTH, GEN_U_REST}},
+    {"TRACK", FAM_ARP, SC_GEN, GR_GENTRK, {GEN_T | GK_OUT, GEN_T | GK_FREEZE, GEN_T | GK_MUTE, 0xFF}},
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
@@ -501,6 +523,21 @@ static const page_t PAGES[] = {
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
+static const param_desc_t *gen_ui_desc(uint32_t pid, int16_t **valp);   /* ui_gen.c: the GEN pages */
+static void gen_ui_commit(const int16_t *vp);
+static uint32_t gen_act_cols(uint32_t graph);
+static const char *gen_act_name(uint32_t c);
+static int gen_act_ready(uint32_t c);
+static void gen_act_do(uint32_t c);
+static void gen_confirm_text(uint32_t kind, uint32_t k, char *a, char *b);
+static void gen_confirm_do(uint32_t kind, uint32_t k);
+static uint32_t gen_graph_sig(uint32_t graph);
+static void gen_graph(uint32_t graph, const struct track *t);
+static void gen_ly_open(void);                        /* ui_gen.c: ARP held, the generator's quick layer */
+static void gen_ly_key(uint32_t k);
+static void gen_ly_putback(void);
+static void gen_ly_random(void);
+static void gen_ly_map(void);
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
@@ -508,6 +545,8 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = 0;
         return 0;
     }
+    if (pg->scope == SC_GEN)
+        return gen_ui_desc(id, valp);
     if (pg->scope == SC_STEP || pg->scope == SC_TRK) {
         *valp = 0;
         return 0;

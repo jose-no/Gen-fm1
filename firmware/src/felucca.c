@@ -99,6 +99,7 @@
 #include "ui_input.c"
 #include "ui_layer.c"              /* the quick layers (FX GLO SCL EDIT REC held; SEQ TOOLS: ui_tools.c) */
 #include "gen_setup.c"            /* the generative machine's settings (gen.c) */
+#include "ui_gen.c"               /* the generator on the screen: GEN, TRACK, SETUPS, POWER ON */
 
 /* --------------------------------------------- storage, update, editor --- */
 #if FELUCCA_FLASH
