@@ -15,8 +15,9 @@
  *   - the screen: lcd_fill / lcd_blit into a 240 x 240 RGB565 frame (the panel's byte order);
  *   - the flash: a 1 MiB NOR image behind storage.c's hooks (settings, projects, user presets, the user
  *     sample slots read through it as XIP); the page keeps its storage sectors and gives them back at boot.
- * Not here: USB (MIDI, audio, the editor, updates), TRS MIDI, the serial console, the battery (full), the
- * crash / UBOOT paths. Nothing of the firmware changes for this file.
+ * Not here: USB (MIDI, audio, updates), TRS MIDI, the serial console, the battery (full), the crash / UBOOT paths.
+ * The editor protocol (editor.c) is: SysEx in through web_sx_in, out through web_sx_out (the control page drives
+ * this FM-1 as it would a real one). Nothing of the firmware changes for this file.
  *   web/emu/build.sh  ->  build/emu/{felucca.wasm, worklet.js, index.html} */
 #include <stdint.h>
 
@@ -25,7 +26,7 @@
 #define FELUCCA_CDC 1                    /* as src/felucca.c: MENU > USB SERIAL is there (nothing behind it) */
 #endif
 #define FELUCCA_FLASH 1
-#define FELUCCA_OTA 0
+#define FELUCCA_OTA 1                    /* the SysEx plumbing (usb.c), for the editor below; no updates here */
 #define FELUCCA_UAC 0
 #define FELUCCA_UART 0
 #ifndef FELUCCA_VERSION
@@ -251,10 +252,35 @@ static void cdc_task(void) {}
 /* main.c's calls into the USB driver (registers): nothing here (usb.c's own functions stay as they are) */
 #define usb_poll() ((void)0)
 #define usb_start() ((void)0)
+/* the editor's flash calls (sample slots, backups) on this flash; no updates here (main.c's calls into ota.c) */
+static void fl_inval(uint32_t off, uint32_t n) { (void)off; (void)n; }
+static int fl_erase4k(uint32_t off, uint32_t *took) { *took = 0; return st_erase(off); }
+static int fl_write(uint32_t off, const void *p, uint32_t n) { return st_prog(off, p, n); }
+static void audio_silence(void) {}
+static int ota_boot_cleanup(void) { return 0; }
+static void ota_service(void) {}
+static int ota_session(void) { return 0; }
+static void ed_service(void);
 #define usb_retry(ms) ((void)(ms))
 #define usb_detach() ((void)0)
 #include "../../firmware/src/master.c"
 #include "../../firmware/src/main.c"
+
+/* ------------------------------------------------- the editor (SysEx) --- */
+static uint8_t web_sx_obuf[8192];
+static uint32_t web_sx_on;
+static void web_sx_drain(void)                    /* the device's SysEx packets -> bytes for the page */
+{
+    while (so_r != so_w) {
+        uint32_t p = sx_out_q[so_r++ % SXQ], cin = p & 15u, i;
+        uint32_t n = cin == 4u || cin == 7u ? 3u : cin == 6u ? 2u : cin == 5u ? 1u : 0u;
+        for (i = 0; i < n && web_sx_on < sizeof web_sx_obuf; i++)
+            web_sx_obuf[web_sx_on++] = (uint8_t)(p >> (8u * (i + 1u)));
+    }
+}
+static uint32_t ota_now_ms(void) { return fm1_ms; }
+static void ota_idle(void) { web_sx_drain(); }
+#include "../../firmware/src/editor.c"
 #undef usb_poll
 #undef usb_start
 #undef usb_retry
@@ -298,6 +324,8 @@ static void web_frame(void)
     ui_input();
     gen_persist_poll();
     settings_poll();
+    ed_service();                                 /* main.c: the editor's requests, replies and pushes */
+    web_sx_drain();
     autosave_poll();
     ui_leds();
     ui_draw();
@@ -540,4 +568,19 @@ EXPORT uint32_t web_midi_out(void)
 {
     return gen_web_mo_r == gen_web_mo_w ? 0u : gen_web_mo[gen_web_mo_r++ % 256u];
 }
+
+/* SysEx between the page and the editor: the page writes a frame's bytes (F0 .. F7) at web_sx_ibuf and calls
+ * web_sx_in(n); the device's replies and pushes collect at web_sx_out (web_sx_out_len bytes, then web_sx_out_clear) */
+static uint8_t web_sx_ibuf[1024];
+EXPORT uint8_t *web_sx_ibuf_ptr(void) { return web_sx_ibuf; }
+EXPORT void web_sx_in(uint32_t n)
+{
+    uint32_t i;
+    usb.config = 1;                               /* (a host is there: the editor watches only then) */
+    for (i = 0; i < n && i < sizeof web_sx_ibuf; i++)
+        sysex_byte(web_sx_ibuf[i]);
+}
+EXPORT uint8_t *web_sx_out(void) { web_sx_drain(); return web_sx_obuf; }
+EXPORT uint32_t web_sx_out_len(void) { web_sx_drain(); return web_sx_on; }
+EXPORT void web_sx_out_clear(void) { web_sx_on = 0; }
 

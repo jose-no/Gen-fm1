@@ -1235,3 +1235,24 @@ device gone at ~0.3 s, the MIDI port gone at ~0.57 s and back at ~1.15 s; ON -> 
 at ~0.6 s while the MIDI port was not seen to disappear at all (so do not wait for a disconnect event: after
 a real change, wait ~1.5 s and open again). What the editor sends in that window is lost, `WATCH` ends with the
 bus reset (send `INFO` and `WATCH` again after reconnecting), and a backup in progress answers rc 5 (stale).
+
+## Generator (Gen-FM1, cmds 96..101)
+
+Gen-FM1's generative machine (`firmware/src/gen.c`, `gen_setup.c`) over the same framing
+(`firmware/src/editor_gen.c`). The control page (`web/control/`) uses these alone.
+
+Settings have ids 0..127: the global ones 0..31 (`GP_*`), then 24 per track from 32 (`32 + 24 × track + GK_*`).
+Values are v14. Some ids are actions rather than settings (PLAY 11, REGEN 12, RANDOM 16, DEFAULTS 17, SAVE 18,
+LOAD 19, CLEAR 21): setting them does something, reading them gives 0 (PLAY gives whether it plays).
+
+| cmd | request | reply |
+| --- | --- | --- |
+| 96 GEN_INFO | — | version (1), id count v14 (128), GP_TRK (32), ids per track (24), tracks (4), setup slots (8) |
+| 97 GEN_ALL | [start [, count]] (no count or 0: to the last id) | start, count v14, count × v14 |
+| 98 GEN_SET | id, v14 | id, v14 (the value as it is after: clamped; 0 for an action). No push for it |
+| 99 GEN_STATUS | — | 42 × v14: on, playing, key, scale, progression source, loop length, the master's chord, each track's chord (4), the scale's mask (low byte, high byte), each track's step (4), the loop's degrees (16), each track's density now (4), macro + 100, the settings' version, the saved slots (bit n: slot n + 1), power-on (0 random, 1 last, 2.. setup 1..), a save waiting to be written |
+| 100 GEN_CHANGED (push) | — | id, v14: a setting changed on the device (its knobs and keys, MIDI CC 16), not by the page's GEN_SET. Each id at most every 20 ms, the latest value |
+| 101 GEN_RELOAD (push) | — | version: the settings changed all at once (RANDOM, DEFAULTS, LOAD, power-on), also after the page's own RANDOM / DEFAULTS / LOAD: read them again with GEN_ALL |
+
+The pushes go while watching (`WATCH 1`, cmd 22), which ends 3 s after the last request: a page that polls
+GEN_STATUS (10 times a second, say) keeps it alive. A new `WATCH` starts from the settings as they are.

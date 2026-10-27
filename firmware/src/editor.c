@@ -56,6 +56,9 @@ static void ed_send(void)
     ota_wire_send(ed_out, ed_n);
 }
 static int32_t ed_rv(const uint8_t *p) { return (int32_t)(p[0] | p[1] << 7) - 8192; }
+static int ed_gen_handle(uint32_t cmd, const uint8_t *a, uint32_t na);   /* editor_gen.c: the generator */
+static void ed_gen_sync(uint32_t now, uint32_t *n);
+static void ed_gen_off(void);
 
 /* ---- user sample slots (eng_sample.c): flash SMP_USER_BASE + k * SMP_USER_SIZE ----
  * BEGIN erases the header sector (the slot is invalid from then on), WRITE fills the data
@@ -207,11 +210,16 @@ static void ed_known(uint32_t k, uint32_t id)            /* the editor's own cha
 static void ed_sync(void)                                /* main loop */
 {
     uint32_t i, n = 0, now = fm1_ms;
-    if (!ed_w.on || now - ed_w.run_ms < 5u)
+    if (!ed_w.on) {
+        ed_gen_off();
+        return;
+    }
+    if (now - ed_w.run_ms < 5u)
         return;
     ed_w.run_ms = now;
     if (!usb.config || usb.resets != ed_w.resets || now - ed_w.last_ms > 3000u) {
         ed_w.on = 0;                                     /* no host, USB reset, or 3 s without a request */
+        ed_gen_off();
         return;
     }
     if (sync_reload || ed_eng(TSEL) != ed_w.eng || TSEL->preset != ed_w.preset || song.sel != ed_w.sel) {
@@ -272,6 +280,7 @@ static void ed_sync(void)                                /* main loop */
         n++;
         ed_w.tpos = k + 1u;
     }
+    ed_gen_sync(now, &n);                                /* the generator's settings (editor_gen.c) */
 }
 
 /* descriptor of parameter id of track t: the engine parameters of the engine it asked for
@@ -354,6 +363,7 @@ static int ed_flash_stop(void)
 #include "editor_menu.c"
 #include "editor_learn.c"                    /* 1.5: MIDI LEARN's map (cmds 78, 79) */
 #include "editor_palette.c"                  /* 1.6: CUSTOM, the user's palette (cmds 80, 81) */
+#include "editor_gen.c"                      /* the generative machine (cmds 96..101) */
 
 /* MOTION's reply: the records of track k as (step, id, v14), a lock's id without its MOTION_LOCK bit (a 7-bit SysEx
  * byte); kinds (1.1: the ops 5..7): then one byte per record, in the same order, 0 automation, 1 lock. The query and
@@ -445,6 +455,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     if (ed_menu_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_learn_handle(cmd, a, na)) { ed_send(); return; }
     if (ed_palette_handle(cmd, a, na)) { ed_send(); return; }
+    if (ed_gen_handle(cmd, a, na)) { ed_send(); return; }
     switch (cmd) {
     case ED_MOTION: {
         track_t *t = &trk[a[0]]; uint32_t rc = 0;
@@ -772,8 +783,10 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_w.on = a[0] & 1u;                                          /* pushed stay pending (INFO 53 01 bit 0) */
         ed_w.v4 = (uint8_t)(ed_w.on && (a[0] & 2u));     /* v4: also TRACK_CHANGED; the reply says it is known */
         ed_w.resets = usb.resets;
-        if (ed_w.on && !keep)
+        if (ed_w.on && !keep) {
             ed_shadow();
+            ed_gen_off();                                 /* the generator's settings: from as they are, too */
+        }
         else if (keep && ed_w.v4 && !v4was)
             for (i = 0; i < ED_NT; i++)                    /* TRACK_CHANGED newly asked for: from the mix as it is */
                 ed_w.tv[i] = trk[i / 3u].p[ED_TIDS[i % 3u]];
