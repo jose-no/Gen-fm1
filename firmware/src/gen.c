@@ -30,8 +30,8 @@ enum { GO_BOTH, GO_INT, GO_MIDI };                             /* output */
 /* parameter ids (web_gen / the UI): globals, then 16 per track from GP_TRK */
 enum {
     GP_ON, GP_ROOT, GP_SCALE, GP_UMASK, GP_SRC, GP_PRESET, GP_PLEN, GP_RATE, GP_MUT, GP_COMBINE, GP_BPM, GP_PLAY,
-    GP_REGEN, GP_MACRO, GP_DRIFT, GP_SWING,
-    GP_TRK = 16
+    GP_REGEN, GP_MACRO, GP_DRIFT, GP_SWING, GP_RANDOM, GP_DEFAULTS,
+    GP_TRK = 32
 };
 enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,
        GK_LEN, GK_DMSRC, GK_DMRATE, GK_DMDEPTH, GK_WEIGHT, GK_CHANCE, GK_DRIFT, GK_SWING, GK_N = 24 };
@@ -104,6 +104,7 @@ static struct {
     volatile uint8_t regen;              /* the UI asks for a new loop */
     volatile int8_t macro;               /* the MACRO knob, -100..100: every track's DENSITY by its WEIGHT */
     uint8_t drift;                       /* DRIFT for every track, 0..100, added to each track's own */
+    volatile uint8_t ver;                /* + 1 whenever the settings change all at once (RANDOM, DEFAULTS, power-on) */
     /* what plays now, for the screen / the page */
     volatile uint8_t cur_m, cur_t[NPART];
 } gen;
@@ -681,6 +682,8 @@ static void gen_defaults(void)
     gen.rate = 1;                        /* 1 bar */
     gen.mut = 20;
     gen.combine = GC_INDEP;
+    gen.drift = 0;
+    gen.macro = 0;
     for (i = 0; i < NPART; i++)
         gen.tk[i] = D[i];
     if (!gen.seed)

@@ -77,6 +77,7 @@ if (typeof registerProcessor === "function") {
           ex.web_nor_erase();
           restoreSectors(new Uint8Array(ex.memory.buffer, ex.web_nor(), ex.web_nor_size()), m.sectors);
           ex.web_master(m.master ?? 700);
+          if (ex.web_gen_seed && m.seed) ex.web_gen_seed(m.seed >>> 0);   // a new setup at each power-on
           ex.web_boot();
           this.ex = ex;
           this.sentWrites = ex.web_flash_writes_count();
@@ -126,10 +127,17 @@ if (typeof registerProcessor === "function") {
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
       if (ex.web_gen_info) {                          // the generative machine's state, when it changes
-        const g = new Uint8Array(mem, ex.web_gen_info(), 38).slice(), key = g.join(",");
+        const g = new Uint8Array(mem, ex.web_gen_info(), 39).slice(), key = g.join(",");
         if (key !== this.sentGen) { this.sentGen = key; msg.gen = g; }
+        if (g[38] !== this.sentGenVer && ex.web_gen_get) {   // all of its settings, when they changed at once
+          this.sentGenVer = g[38];
+          const all = {};
+          for (let id = 0; id < 16; id++) all[id] = ex.web_gen_get(id);
+          for (let t = 0; t < 4; t++) for (let k = 0; k < 20; k++) all[32 + t * 24 + k] = ex.web_gen_get(32 + t * 24 + k);
+          msg.genAll = all;
+        }
       }
-      if (msg.leds || msg.fb || msg.sectors || msg.gen || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (msg.leds || msg.fb || msg.sectors || msg.gen || msg.genAll || msg.load !== undefined) this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than

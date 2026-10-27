@@ -35,7 +35,9 @@ for a, b in [('          if (m.leds) drawLights(lastLeds = m.leds, m.anim);',
               '          if (m.leds) drawLights(lastLeds = m.leds, m.anim);\n          if (m.gen) drawGen(m.gen);'),
              ('        else if (m.type === "frame") {', '        else if (m.type === "midi") onMidiOut(m.events);\n        else if (m.type === "frame") {'),
              ('    midiOn();\n', '    midiOn();\n    genReady();\n'),
-             ('const STORE = "felucca-emu-flash"', 'const STORE = "fm1-gen-emu-flash"')]:
+             ('const STORE = "felucca-emu-flash"', 'const STORE = "fm1-gen-emu-flash"'),
+             ('          if (m.gen) drawGen(m.gen);', '          if (m.gen) drawGen(m.gen);\n          if (m.genAll) syncGen(m.genAll);'),
+             ('master: masterValue }, [wasm]);', 'master: masterValue, seed: crypto.getRandomValues(new Uint32Array(1))[0] }, [wasm]);')]:
     assert a in body, a
     body = body.replace(a, b, 1)
 (out / "index.html").write_text(head.strip() + "\n" + body.strip() + "\n")

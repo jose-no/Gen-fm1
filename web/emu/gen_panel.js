@@ -1,9 +1,10 @@
 // ------------------------------------------------------------------ the generative machine (firmware/src/gen.c)
-// Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 16 x track + GK_*); its state comes back in the
-// frames (felucca_web.c web_gen_info), its MIDI OUT as it happens (web_midi_out).
-const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15 };
+// Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 24 x track + GK_*); its state comes back in the
+// frames (felucca_web.c web_gen_info), all its settings when they change at once (genAll: power-on, Randomize,
+// Defaults), its MIDI OUT as it happens (web_midi_out).
+const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
-const gtk = (t, k) => 16 + t * 24 + k;
+const gtk = (t, k) => 32 + t * 24 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
 const $ = (id) => document.getElementById(id);
 const NOTE = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
@@ -162,18 +163,41 @@ const cards = TRACKS.map((T, t) => {
   q("lock").addEventListener("change", (e) => { gset(gtk(t, GK.LOCK), e.target.checked ? 1 : 0); q("mult").disabled = e.target.checked; });
   q("freeze").addEventListener("change", (e) => { gset(gtk(t, GK.FREEZE), e.target.checked ? 1 : 0); c.classList.toggle("frozen", e.target.checked); });
   q("mute").addEventListener("change", (e) => gset(gtk(t, GK.MUTE), e.target.checked ? 1 : 0));
-  return { el: c, cur: q("cur"), steps: [...q("steps").children], lastStep: -1, dnow: q("dnow"), dnowO: q("dnow-o") };
+  // the card shows the firmware's settings (power-on, Randomize, Defaults): sync(get), get(GK_*) -> value
+  const sync = (g) => {
+    q("patch").value = g(GK.PATCH); q("mode").value = g(GK.MODE); if (T.rhythms) q("rhy").value = g(GK.RHY);
+    q("mult").value = g(GK.MULT); q("oct").value = g(GK.OCT); q("out").value = g(GK.OUT);
+    const n = g(GK.LEN);
+    q("len").value = n - 1;
+    [...stepsEl.children].forEach((x, i) => { x.hidden = i >= n; });
+    stepsEl.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+    q("dmsrc").value = g(GK.DMSRC); q("dmrate").value = g(GK.DMRATE); dmOn();
+    const ranges = [["dens", GK.DENS], ["dmdepth", GK.DMDEPTH], ["weight", GK.WEIGHT], ["drift", GK.DRIFT], ["swing", GK.SWING]]
+      .concat(T.melody ? [["leap", GK.LEAP], ["rest", GK.REST]] : []);
+    for (const [k, gk] of ranges) { q(k).value = g(gk); q(k + "-o").textContent = g(gk); }
+    q("chance").value = g(GK.CHANCE); q("chance-o").textContent = g(GK.CHANCE) + " %";
+    q("lock").checked = !!g(GK.LOCK); q("mult").disabled = !!g(GK.LOCK);
+    q("freeze").checked = !!g(GK.FREEZE); c.classList.toggle("frozen", !!g(GK.FREEZE));
+    q("mute").checked = !!g(GK.MUTE);
+  };
+  return { sync, el: c, cur: q("cur"), steps: [...q("steps").children], lastStep: -1, dnow: q("dnow"), dnowO: q("dnow-o") };
 });
 
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
 // chord names from the scale: degree d's triad
 function pcsOf(mask) { const p = []; for (let i = 0; i < 12; i++) if (mask >> i & 1) p.push(i); return p.length ? p : [0]; }
 function chordOf(d, root, mask) {
   const p = pcsOf(mask), n = p.length, at = (x) => p[((x % n) + n) % n] + 12 * Math.floor(x / n);
   const r = at(d), a = at(d + 2) - r, b = at(d + 4) - r;
-  const q = a === 4 && b === 7 ? ["", true] : a === 3 && b === 7 ? ["m", false] : a === 3 && b === 6 ? ["dim", false]
-          : a === 4 && b === 8 ? ["aug", true] : a === 5 && b === 7 ? ["sus4", true] : a === 2 && b === 7 ? ["sus2", true] : ["(" + a + "," + b + ")", true];
-  const ROM = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
-  let rn = ROM[((d % n) + n) % n] || "?";
+  // the stacked tones' shape -> its name (pentatonic and other scales stack into 6ths, 7ths and suspensions); a shape
+  // with no name shows its three notes
+  const SHAPES = { "4,7": ["", true], "3,7": ["m", false], "3,6": ["dim", false], "4,8": ["aug", true], "5,7": ["sus4", true],
+    "2,7": ["sus2", true], "4,9": ["6", true], "3,9": ["m6", false], "4,10": ["7", true], "3,10": ["m7", false], "4,11": ["maj7", true],
+    "5,10": ["7sus4", true], "2,10": ["7sus2", true], "5,9": ["6sus4", true], "2,9": ["6sus2", true], "3,8": ["m♭6", false],
+    "4,6": ["♭5", true], "2,6": ["sus2♭5", true], "1,7": ["sus♭2", false], "1,5": ["(♭2 4)", false], "5,8": ["sus4♭6", true] };
+  let q = SHAPES[a + "," + b];
+  if (!q) return { name: [r, r + a, r + b].map((x) => NOTE[(root + x) % 12]).join(" "), roman: ROMAN[((d % n) + n) % n] || "?" };
+  let rn = ROMAN[((d % n) + n) % n] || "?";
   if (!q[1]) rn = rn.toLowerCase();
   if (q[0] === "dim") rn += "°";
   if (q[0] === "aug") rn += "+";
@@ -211,6 +235,30 @@ function drawGen(g) {
     c.dnowO.textContent = genPlaying && dn !== null ? `density now ${dn}` : "–";
   });
 }
+
+// every setting at once, as the firmware has them (worklet.js genAll: {id: value})
+function syncGen(a) {
+  $("g-root").value = a[GP.ROOT];
+  rootNow = a[GP.ROOT];
+  $("g-scale").value = a[GP.SCALE];
+  $("g-umask-row").hidden = a[GP.SCALE] !== 16;
+  umask = a[GP.UMASK];
+  drawUmask();
+  $("g-src").value = a[GP.SRC];
+  $("g-preset").value = a[GP.PRESET];
+  showPreset();
+  $("g-plen").value = a[GP.PLEN] - 2;
+  $("g-rate").value = a[GP.RATE];
+  $("g-combine").value = a[GP.COMBINE];
+  $("g-bpm").value = a[GP.BPM];
+  for (const [id, gp] of [["g-mut", GP.MUT], ["g-drift", GP.DRIFT], ["g-swing", GP.SWING], ["g-macro", GP.MACRO]]) {
+    $(id).value = a[gp];
+    $(id + "-o").textContent = a[gp];
+  }
+  cards.forEach((c, t) => c.sync((k) => a[gtk(t, k)]));
+}
+$("gen-random").addEventListener("click", () => gset(GP.RANDOM, Math.floor(Math.random() * 0x7fffffff)));
+$("gen-defaults").addEventListener("click", () => gset(GP.DEFAULTS, 1));
 
 // On starts it playing at once; Off stops the transport too (the patterns it wrote stay)
 $("gen-on").addEventListener("click", () => {
@@ -253,9 +301,7 @@ async function genMidiPorts() {
 }
 
 function genReady() {
-  $("gen-on").disabled = false;
-  $("gen-play").disabled = false;
-  $("gen-hint").textContent = "The generator is on from power-on: press Play here or on the FM-1. SEQ on the FM-1 shows the patterns being written.";
-  gset(GP.BPM, +$("g-bpm").value);
+  for (const id of ["gen-on", "gen-play", "gen-random", "gen-defaults"]) $(id).disabled = false;
+  $("gen-hint").textContent = "Each power-on draws a new setup. Press Play here or on the FM-1; Randomize draws another.";
   genMidiPorts();
 }

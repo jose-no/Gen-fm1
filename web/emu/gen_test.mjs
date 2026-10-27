@@ -10,16 +10,21 @@ const bytes = fs.readFileSync(process.argv[2] || "build/emu/felucca.wasm");
 let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
-             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15 };
+             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
-const tk = (t, k) => 16 + t * 24 + k;
+const tk = (t, k) => 32 + t * 24 + k;
 
-async function device() {
-  const { instance } = await WebAssembly.instantiate(bytes, {});
+const MOD = new WebAssembly.Module(bytes);
+// a powered-on FM-1: by default reset to the generator's DEFAULTS after boot (the checks below expect them);
+// { seed } keeps the setup drawn at power-on, from the page's seed
+async function device(opt = {}) {
+  const instance = await WebAssembly.instantiate(MOD, {});
   const ex = instance.exports, mem = ex.memory;
   ex._initialize();
   ex.web_nor_erase();
+  if (opt.seed !== undefined) ex.web_gen_seed(opt.seed);
   ex.web_boot();
+  if (opt.seed === undefined) ex.web_gen(17, 1);
   const d = { ex, mem, peak: 0, midi: [], audio: [] };
   d.render = (ms, keep) => {
     const n = Math.round(ms * 44.1);
@@ -302,6 +307,58 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
   const chans = new Set(p.midi.filter((e) => (e.st & 0xf0) === 0x90).map((e) => e.st & 15));
   check(`power-on: generator on (${onAtBoot}), a loop of ${loopAtBoot} chords; the panel's PLAY plays all ${chans.size} tracks`,
         onAtBoot === 1 && loopAtBoot >= 2 && chans.size === 4 && p.peak > 0.02);
+}
+
+// RANDOM at power-on: every setting drawn within its range; a different seed, a different setup; the same, the same
+{
+  const ids = [...Array(16).keys()].filter((i) => ![11, 12].includes(i)).concat([0, 1, 2, 3].flatMap((t) => [...Array(20).keys()].map((k) => tk(t, k))));
+  const read = (d) => ids.map((i) => d.ex.web_gen_get(i));
+  const setups = [];
+  let inRange = true, scales = new Set(), roots = new Set(), patches = new Set();
+  for (let seed = 1; seed <= 24; seed++) {
+    const d = await device({ seed: seed * 2654435761 });
+    d.render(100);
+    const g = (i) => d.ex.web_gen_get(i);
+    setups.push(read(d).join(","));
+    scales.add(g(GP.SCALE)); roots.add(g(GP.ROOT)); patches.add(g(tk(0, GK.PATCH)));
+    if (!(g(GP.ON) === 1 && g(GP.BPM) >= 84 && g(GP.BPM) <= 120 && g(GP.SCALE) >= 1 && g(GP.SCALE) <= 9 && g(GP.PLEN) >= 3 && g(GP.PLEN) <= 8 &&
+          g(GP.MUT) >= 5 && g(GP.MUT) <= 40 && g(GP.MACRO) === 0)) inRange = false;
+    for (let t = 0; t < 4; t++) {
+      const k = (x) => g(tk(t, x));
+      if (!(k(GK.DENS) >= 25 && k(GK.DENS) <= 75 && k(GK.LEN) >= 5 && k(GK.LEN) <= 16 && k(GK.CHANCE) >= 70 && k(GK.CHANCE) <= 100 &&
+            k(GK.OUT) === 0 && k(GK.FREEZE) === 0 && k(GK.MUTE) === 0 && Math.abs(k(GK.DMDEPTH)) <= 60)) inRange = false;
+      if (t === 2 && ![2, 5, 7].includes(k(GK.PATCH))) inRange = false;   // the bass: FM Bass, Marimba or Pluck
+    }
+  }
+  check(`24 power-ons: ${new Set(setups).size} different setups, ${roots.size} keys, ${scales.size} scales, every setting in its range`,
+        new Set(setups).size === 24 && roots.size >= 8 && scales.size >= 5 && inRange);
+  const [x, y] = [await device({ seed: 777 }), await device({ seed: 777 })];
+  check("the same seed gives the same setup", read(x).join() === read(y).join());
+  // a random setup plays, in its own scale, on all four tracks
+  const r = await device({ seed: 4242 });
+  r.render(1200);
+  const info = new Uint8Array(r.mem.buffer, r.ex.web_gen_info(), 39), mask = info[11] | info[12] << 8, root = info[2];
+  r.ex.web_gen(GP.PLAY, 1);
+  r.render(10000);
+  const on = r.midi.filter((e) => (e.st & 0xf0) === 0x90);
+  check(`a random setup (key ${root}, scale mask ${mask.toString(16)}): ${on.length} notes on ${new Set(on.map((e) => e.st & 15)).size} tracks, all in its scale`,
+        on.length > 20 && new Set(on.map((e) => e.st & 15)).size >= 3 && on.every((e) => (mask >> ((e.n - root + 120) % 12)) & 1));
+  // RANDOM and DEFAULTS while playing: a new setup at once, back to the defaults, nothing left sounding after STOP
+  r.ex.web_gen(tk(1, GK.OUT), 2);                            // an output the user chose stays through both
+  const v0 = info[38];
+  r.ex.web_gen(GP.RANDOM, 99);
+  r.render(3000);
+  const changed = new Uint8Array(r.mem.buffer, r.ex.web_gen_info(), 39)[38] !== v0;
+  r.ex.web_gen(GP.DEFAULTS, 1);
+  r.render(3000);
+  const back = r.ex.web_gen_get(GP.ROOT) === 0 && r.ex.web_gen_get(GP.SCALE) === 1 && r.ex.web_gen_get(GP.BPM) === 120 &&
+               r.ex.web_gen_get(tk(3, GK.PATCH)) === 7 && r.ex.web_gen_get(tk(1, GK.OUT)) === 2;
+  r.ex.web_gen(GP.PLAY, 0);
+  r.render(1500);
+  const hold = new Map();
+  for (const e of r.midi) { const k = (e.st & 15) * 128 + e.n; hold.set(k, (hold.get(k) || 0) + ((e.st & 0xf0) === 0x90 ? 1 : -1)); }
+  check(`RANDOM while playing (new setup: ${changed}), then DEFAULTS (${back}); output kept; nothing left sounding`,
+        changed && back && [...hold.values()].every((n) => n <= 0));
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");

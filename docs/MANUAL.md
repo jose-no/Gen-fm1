@@ -4,11 +4,23 @@ Gen-FM1 turns the FM-1 into four generative tracks that play together in one key
 
 ## Getting started
 
-1. Switch the FM-1 on (on the web page: press **Switch on** on the FM-1 picture). The generator starts with it: the four tracks are set up, each with an FM sound, a one-bar pattern of sixteenth notes and its role.
+1. Switch the FM-1 on (on the web page: press **Switch on** on the FM-1 picture). The generator starts with it, with a new setup drawn at random: key, scale, tempo, progression, and each track's sound, rhythm and density (see [Random setups](#random-setups)).
 2. Press **PLAY** on the FM-1, or **Play** on the web page.
 3. Change anything while it plays. Changes take effect from the next step.
 
 The **On** button turns the generator off and on again. Off stops playback and the generator; the patterns it last wrote stay and play like any Felucca pattern. At the next power-on it starts again.
+
+## Random setups
+
+Every power-on draws a new setup, so the FM-1 starts somewhere different each time. The draw stays within ranges that suit each part:
+
+- **Tempo** 84–120 BPM, **key** any of the 12, **scale** mostly major, minor and the modes, with some pentatonic and harmonic minor. Chromatic, whole tone, diminished and blues are never drawn.
+- **Progression** any source, 3 to 8 chords (most often 4), changing every ½ to 8 bars. **Mutation** 5–40.
+- **Sounds that suit the part:** the dyads draw from Tine EP, Bell, Brass, Pad and Organ; the bass from FM Bass (most often), Marimba and Pluck; the melody from Pluck, Bell, Marimba, Tine EP and Brass.
+- **Densities** 25–75. About half the tracks get a density mod; a quarter get an odd length (5–14 steps); a third get some drift or a chance below 100 %. The bass is usually locked to the master chords.
+- **Not drawn:** each track's output (synth, MIDI or both) stays as you set it, and freeze, mute and the macro start off.
+
+On the web page, **Randomize** draws a new setup at any time, even while it plays, and **Defaults** returns to the settings this manual lists. Once settings can be saved, you'll be able to keep a setup you like.
 
 ## How it works
 
@@ -154,5 +166,5 @@ MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the track
 ## Limits of this version
 
 - No controls on the FM-1's own screen yet. Settings are made on the web page.
-- Settings are not saved yet: every power-on starts from the defaults above, and replaces the patterns Felucca kept from the last session.
+- Settings are not saved yet: every power-on draws a new setup, and replaces the patterns Felucca kept from the last session.
 - Not yet tested on a real FM-1.

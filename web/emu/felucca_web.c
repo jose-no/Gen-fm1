@@ -502,8 +502,10 @@ EXPORT uint32_t web_sample_rate(void) { return FS; }
 
 /* ------------------------------------------------- the generative machine --- */
 EXPORT void web_gen(uint32_t id, int32_t v) { gen_set(id, v); }
+EXPORT int32_t web_gen_get(uint32_t id) { return gen_get(id); }
+EXPORT void web_gen_seed(uint32_t seed) { gen_web_seed = seed; }   /* before web_boot: the page's random number */
 static uint8_t web_gen_buf[64];
-/* {on, playing, root, scale, src, llen, cur_m, cur_t[4], mask lo, mask hi, step[4], loop[16], dens[4], macro + 100} */
+/* {on, playing, root, scale, src, llen, cur_m, cur_t[4], mask lo, mask hi, step[4], loop[16], dens[4], macro + 100, ver} */
 EXPORT uint8_t *web_gen_info(void)
 {
     uint32_t i, m = gen.llen ? gen_mask() : 0xAB5u;
@@ -526,6 +528,7 @@ EXPORT uint8_t *web_gen_info(void)
     for (i = 0; i < 4u; i++)                     /* {.., dens[4]}: each track's DENSITY now, as modulated */
         b[33 + i] = (uint8_t)(gen.llen ? gen_dens(i, gen.pos[i]) : 0u);
     b[37] = (uint8_t)(gen.macro + 100);           /* the MACRO, 0..200 */
+    b[38] = gen.ver;                              /* + 1 when the settings change all at once */
     return b;
 }
 /* a USB-MIDI event packet the generator sent (MIDI OUT), 0: none */
