@@ -42,14 +42,21 @@
 .chip .who span { width: 8px; height: 8px; border-radius: 50%; }
 .now { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: #9a9a9e; }
 .now span b { color: var(--label); font-weight: 600; }
-.tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tracks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.gen { container-type: inline-size; }
+@container (max-width: 1080px) { .tracks { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 540px) { .tracks { grid-template-columns: minmax(0, 1fr); } }
 .trk { padding: 12px 14px; background: var(--tray); border-radius: 14px; display: grid; gap: 10px; align-content: start;
        border-top: 3px solid var(--c); min-width: 0; }
 .trk header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .trk h3 { margin: 0; font: 600 14px -apple-system, sans-serif; color: var(--label); }
 .trk h3 small { font-weight: 400; color: #9a9a9e; margin-left: 6px; }
 .trk .cur { font: 600 13px -apple-system, sans-serif; color: var(--c); font-variant-numeric: tabular-nums; }
-.trk .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.trk .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 10px; }
+.trk > *, .trk .grid2 > *, .dmod > * { min-width: 0; }
+.trk select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.trk label.wide { min-width: 0; flex: initial; }
+.trk label > :first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .trk .checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .steps { display: grid; grid-template-columns: repeat(16, 1fr); gap: 2px; }
 .steps span { height: 5px; border-radius: 2px; background: var(--part); }

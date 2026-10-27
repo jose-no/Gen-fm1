@@ -20,7 +20,7 @@ head = re.sub(r'<meta name="description" content="[^"]*">',
               '<meta name="description" content="Control the Gen-FM1 generative machine on an M-VAVE FM-1 over USB, or on a virtual FM-1 in the browser.">', head)
 head = head.replace('url("fonts/DotGothic16-subset.woff")', f'url("data:font/woff;base64,{font}")')
 head = head.replace("main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 32px; }",
-    "main { max-width: 1040px; margin: 0 auto; padding-block: 24px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }")
+    "main { max-width: 1280px; margin: 0 auto; padding-block: 24px 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }")
 head = head.replace("@media (orientation: portrait) and (max-width: 700px) { main { padding: 8px 8px 24px; } }",
     "@media (orientation: portrait) and (max-width: 700px) { main { padding-block: 8px 24px; } }")
 head = head.replace("</style>", (emu / "gen_panel.css").read_text() + (here / "control.css").read_text() + "</style>")
