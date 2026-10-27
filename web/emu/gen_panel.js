@@ -5,7 +5,9 @@
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15, RANDOM: 16, DEFAULTS: 17, SAVE: 18, LOAD: 19, BOOT: 20, CLEAR: 21, SLOTS: 22, PENDING: 23, TUNE: 24 };
 const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const gtk = (t, k) => 32 + t * 24 + k;
-const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
+// a control page sets genSetHook (its link to the FM-1); the test page talks to its emulator directly
+let genSetHook = null;
+const gset = (id, v) => (genSetHook ? genSetHook(id, v | 0) : send({ type: "gen", id, v: v | 0 }));
 const $ = (id) => document.getElementById(id);
 const NOTE = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 const SCALES = [["Chromatic", 0xFFF], ["Major", 0xAB5], ["Natural minor", 0x5AD], ["Dorian", 0x6AD], ["Mixolydian", 0x6B5],
@@ -247,6 +249,7 @@ function drawGen(g) {
 
 // every setting at once, as the firmware has them (worklet.js genAll: {id: value})
 function syncGen(a) {
+  const held = document.activeElement, heldV = held && held.matches && held.matches("input[type=range]") ? held.value : null;
   $("g-root").value = a[GP.ROOT];
   rootNow = a[GP.ROOT];
   $("g-scale").value = a[GP.SCALE];
@@ -266,6 +269,7 @@ function syncGen(a) {
     $(id + "-o").textContent = a[gp];
   }
   cards.forEach((c, t) => c.sync((k) => a[gtk(t, k)]));
+  if (heldV !== null) held.value = heldV;            // (a slider being dragged keeps the hand's value)
 }
 // ---- setups: 8 slots in the FM-1's memory (written once playback stops), and what power-on does
 let slotSel = 1, slotsUsed = 0, bootMode = 0, savePending = 0, storeMsg = "", clearArmed = 0;
@@ -359,9 +363,10 @@ async function genMidiPorts() {
     midiAccess = await navigator.requestMIDIAccess();
     const fill = () => {
       const sel = $("g-out"), was = sel.value;
-      sel.innerHTML = `<option value="">None</option>` + [...midiAccess.outputs.values()].map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
+      const outs = [...midiAccess.outputs.values()].filter((o) => !/felucca|gen-fm1/i.test(o.name || ""));   // (not back into the FM-1)
+      sel.innerHTML = `<option value="">None</option>` + outs.map((o) => `<option value="${o.id}">${o.name}</option>`).join("");
       sel.value = [...sel.options].some((o) => o.value === was) ? was : "";
-      $("g-out-l").hidden = midiAccess.outputs.size === 0;
+      $("g-out-l").hidden = outs.length === 0;
     };
     $("g-out").addEventListener("change", (e) => { midiOut = e.target.value ? midiAccess.outputs.get(e.target.value) : null; });
     midiAccess.addEventListener("statechange", fill);

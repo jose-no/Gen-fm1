@@ -95,6 +95,11 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
       else if (m.type === "gen" && ex.web_gen) ex.web_gen(m.id | 0, m.v | 0);   // the generative machine (gen.c)
+      else if (m.type === "sx" && ex.web_sx_in) {      // SysEx to the editor (editor.c): a control page's request
+        const b = Uint8Array.from(m.bytes);
+        new Uint8Array(ex.memory.buffer, ex.web_sx_ibuf_ptr(), b.length).set(b);
+        ex.web_sx_in(b.length);
+      }
     }
 
     publish() {
@@ -168,6 +173,14 @@ if (typeof registerProcessor === "function") {
         let midi = null;
         for (let p; (p = ex.web_midi_out()) !== 0;) (midi || (midi = [])).push([(p >>> 8) & 255, (p >>> 16) & 127, (p >>> 24) & 127]);
         if (midi) this.port.postMessage({ type: "midi", events: midi });
+      }
+      if (ex.web_sx_out_len) {                        // the editor's replies and pushes (editor.c), as they come
+        const n = ex.web_sx_out_len();
+        if (n) {
+          const b = new Uint8Array(ex.memory.buffer, ex.web_sx_out(), n).slice();
+          ex.web_sx_out_clear();
+          this.port.postMessage({ type: "sxout", bytes: b }, [b.buffer]);
+        }
       }
       if (currentTime - this.lastFrame >= this.period) {
         this.lastFrame = currentTime;

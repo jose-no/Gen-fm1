@@ -1,0 +1,10 @@
+/* the control page's connection bar (web/control/), in the generator panel's materials */
+[hidden] { display: none !important; }
+.ctl { margin: 0 0 16px; padding: 16px 18px; background: var(--body); color: var(--label); border-radius: 28px; display: grid; gap: 8px; }
+.ctl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.ctl h1 { margin: 0 8px 0 0; font: 600 18px/1.2 "DotGothic16", -apple-system, sans-serif; letter-spacing: .06em; color: var(--lit); }
+.ctl h1 span { color: #9a9a9e; font-weight: 400; }
+.ctl-status { margin: 0; font-size: 13px; color: #9a9a9e; max-width: 70ch; }
+.ctl-status.ok { color: var(--green); }
+.ctl-status.bad { color: var(--warn); }
+.ctl .pill:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
