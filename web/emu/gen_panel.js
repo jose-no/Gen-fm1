@@ -1,8 +1,8 @@
 // ------------------------------------------------------------------ the generative machine (firmware/src/gen.c)
 // Its settings go to the firmware by id (gen.c GP_*, GP_TRK + 16 x track + GK_*); its state comes back in the
 // frames (felucca_web.c web_gen_info), its MIDI OUT as it happens (web_midi_out).
-const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17 };
+const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10, PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const gtk = (t, k) => 16 + t * 24 + k;
 const gset = (id, v) => send({ type: "gen", id, v: v | 0 });
 const $ = (id) => document.getElementById(id);
@@ -50,6 +50,8 @@ bindSel("g-combine", GP.COMBINE);
 $("g-bpm").addEventListener("change", (e) => { const v = Math.min(240, Math.max(40, +e.target.value || 120)); e.target.value = v; gset(GP.BPM, v); });
 $("g-mut").addEventListener("input", (e) => { $("g-mut-o").textContent = e.target.value; gset(GP.MUT, +e.target.value); });
 $("g-regen").addEventListener("click", () => gset(GP.REGEN, 1));
+for (const [k, gp] of [["g-drift", GP.DRIFT], ["g-swing", GP.SWING]])
+  $(k).addEventListener("input", (e) => { $(k + "-o").textContent = e.target.value; gset(gp, +e.target.value); });
 $("g-macro").addEventListener("input", (e) => { $("g-macro-o").textContent = e.target.value; gset(GP.MACRO, +e.target.value); });
 $("g-macro").addEventListener("dblclick", (e) => { e.target.value = 0; $("g-macro-o").textContent = 0; gset(GP.MACRO, 0); });
 function showPreset() { const s = +$("g-src").value; $("g-preset-l").hidden = !(s === 0 || s === 6); }
@@ -106,6 +108,10 @@ const cards = TRACKS.map((T, t) => {
     ${T.melody ? `<label class="wide">Leaps <input type="range" id="${id("leap")}" min="0" max="100"> <output id="${id("leap-o")}"></output></label>
     <label class="wide">Rests <input type="range" id="${id("rest")}" min="0" max="100"> <output id="${id("rest-o")}"></output></label>` : ""}
     <label class="wide">Chance <input type="range" id="${id("chance")}" min="1" max="100"> <output id="${id("chance-o")}"></output></label>
+    <div class="grid2">
+      <label class="wide">Drift <input type="range" id="${id("drift")}" min="0" max="100" value="0"> <output id="${id("drift-o")}">0</output></label>
+      <label class="wide">Swing <input type="range" id="${id("swing")}" min="0" max="100" value="0"> <output id="${id("swing-o")}">0</output></label>
+    </div>
     <div class="checks">
       <label class="check"><input type="checkbox" id="${id("lock")}"> Harmony lock</label>
       <label class="check"><input type="checkbox" id="${id("freeze")}"> Freeze</label>
@@ -148,6 +154,8 @@ const cards = TRACKS.map((T, t) => {
   range("dens", GK.DENS);
   range("weight", GK.WEIGHT);
   range("chance", GK.CHANCE);
+  for (const [k, gk] of [["drift", GK.DRIFT], ["swing", GK.SWING]])
+    q(k).addEventListener("input", (e) => { q(k + "-o").textContent = e.target.value; gset(gtk(t, gk), +e.target.value); });
   q("chance-o").textContent += " %";
   q("chance").addEventListener("input", () => { q("chance-o").textContent = q("chance").value + " %"; });
   if (T.melody) { range("leap", GK.LEAP); range("rest", GK.REST); }

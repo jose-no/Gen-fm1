@@ -18,6 +18,7 @@ Gen-FM1 is a fork of [Felucca](https://github.com/hugelton/Felucca) by Leo Kuros
 - **Density modulation:** each track's density can move by itself with a sine, triangle, ramp, square, random or drifting shape, synced from ¼ bar to 32 bars.
 - **Macro:** one knob (or MIDI CC 16) that moves every track's density at once, each by its own weight, which can be negative.
 - **Chance:** each track's notes play at a chance from 1 to 100 %, so even a frozen pattern varies.
+- **Drift and swing:** notes can land a little early or late by a random amount each pass (drift), or with a regular shuffle (swing), set for all tracks and for each track.
 - **Per track:** pattern length (1–16 steps, so tracks can run in different lengths), FM sound, interval or pattern, rhythm, density, octave, mute, and output to the synth, USB MIDI, or both.
 - **MIDI out:** each track sends its notes on its own channel (tracks 1–4 on channels 1–4).
 

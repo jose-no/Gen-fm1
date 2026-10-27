@@ -21,6 +21,8 @@ static void gen_track_setup(uint32_t ti)
     t->p[P_SDIV] = 2;                    /* 1/16 */
     t->p[P_SGATE] = ti < GT_BASS ? 120 : ti == GT_BASS ? 96 : 100;
     t->p[P_QUANT] = QN_OFF;
+    t->p[P_SQNT] = 0;                    /* QUANTIZE off: the steps' NUDGE plays (DRIFT, gen.c gen_drift) */
+    t->p[P_SSWING] = gen.tk[ti].swing;
     t->p[P_CHRD] = 0;
     t->p[P_AMODE] = 0;                   /* ARP off */
     t->p[P_LEVEL] = ti == GT_DYAD_B ? 88 : ti == GT_MEL ? 92 : 100;
@@ -78,6 +80,12 @@ static void gen_set(uint32_t id, int32_t v)
         case GK_DMDEPTH: g->dmdepth = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
         case GK_WEIGHT: g->weight = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
         case GK_CHANCE: g->chance = (uint8_t)gen_lim(v, 1, 100); break;
+        case GK_DRIFT: g->drift = (uint8_t)gen_lim(v, 0, 100); break;
+        case GK_SWING:
+            g->swing = (uint8_t)gen_lim(v, 0, 100);
+            if (gen.on)
+                trk[ti].p[P_SSWING] = (int16_t)g->swing;
+            break;
         case GK_LEN:
             g->len = (uint8_t)gen_lim(v, 1, GEN_STEPS);
             if (gen.on)
@@ -101,6 +109,8 @@ static void gen_set(uint32_t id, int32_t v)
     case GP_BPM: song.g[G_BPM] = (int16_t)gen_lim(v, 40, 240); break;
     case GP_PLAY: transport_req = v ? 1u : 2u; break;
     case GP_REGEN: gen.regen = 1; break;
+    case GP_DRIFT: gen.drift = (uint8_t)gen_lim(v, 0, 100); break;
+    case GP_SWING: song.g[G_SWING] = (int16_t)gen_lim(v, 0, 100); break;
     case GP_MACRO: gen.macro = (int8_t)((int32_t)gen_lim(v + 100, 0, 200) - 100); break;
     default: break;
     }

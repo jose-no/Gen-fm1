@@ -10,8 +10,8 @@ const bytes = fs.readFileSync(process.argv[2] || "build/emu/felucca.wasm");
 let fails = 0;
 const check = (what, ok) => { console.log(`gen: ${what.padEnd(80)} ${ok ? "ok" : "FAIL"}`); if (!ok) fails++; };
 const GP = { ON: 0, ROOT: 1, SCALE: 2, UMASK: 3, SRC: 4, PRESET: 5, PLEN: 6, RATE: 7, MUT: 8, COMBINE: 9, BPM: 10,
-             PLAY: 11, REGEN: 12, MACRO: 13 };
-const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17 };
+             PLAY: 11, REGEN: 12, MACRO: 13, DRIFT: 14, SWING: 15 };
+const GK = { MULT: 0, LOCK: 1, FREEZE: 2, OUT: 3, MODE: 4, RHY: 5, DENS: 6, OCT: 7, LEAP: 8, REST: 9, PATCH: 10, MUTE: 11, LEN: 12, DMSRC: 13, DMRATE: 14, DMDEPTH: 15, WEIGHT: 16, CHANCE: 17, DRIFT: 18, SWING: 19 };
 const tk = (t, k) => 16 + t * 24 + k;
 
 async function device() {
@@ -227,6 +227,66 @@ check(`user scale C D E G A: ${bon.length} notes, all in it`, bon.length > 10 &&
   const ratio = part.length / 2 / full;
   check(`CHANCE 40 % on a frozen melody: ${(ratio * 100).toFixed(0)} % of its notes play, the bars differ`,
         ratio > 0.25 && ratio < 0.55 && new Set(perBar).size > 3);
+}
+
+// DRIFT and SWING: where the notes land against the 1/16 grid, in 1/16 of a step (the NUDGE unit)
+{
+  const STEP = 44100 * 60 / 120 / 4, U = STEP / 16;
+  async function onsets(setup, ms = 16000) {
+    const g = await device();
+    g.render(1200);
+    g.ex.web_gen(GP.BPM, 120);
+    g.ex.web_gen(GP.ON, 1);
+    g.ex.web_gen(tk(2, GK.DENS), 100);                     // a busy bass: notes on most steps
+    g.ex.web_gen(tk(2, GK.WEIGHT), 0);
+    setup(g);
+    g.ex.web_gen(GP.PLAY, 1);
+    g.render(ms);
+    const on = g.midi.filter((x) => x.st === 0x92);
+    const t0 = on[0].f;                                    // step 0 always plays on time (drift draws late or 0 there? see below)
+    return on.map((x) => { const k = Math.round((x.f - t0) / STEP); return { k, off: (x.f - t0 - k * STEP) / U }; });
+  }
+  const tight = await onsets(() => {});
+  const maxTight = Math.max(...tight.map((o) => Math.abs(o.off)));
+  check(`DRIFT 0: ${tight.length} bass notes all on the grid (within ${maxTight.toFixed(2)} of 1/16 step)`, maxTight < 0.5);
+  const loose = await onsets((g) => g.ex.web_gen(tk(2, GK.DRIFT), 100));
+  // the first note is the reference: measure the rest against the median grid phase instead
+  const offs = loose.map((o) => o.off), med = [...offs].sort((a, b) => a - b)[offs.length >> 1];
+  const rel = offs.map((o) => o - med);
+  const early = rel.filter((o) => o < -0.6).length, late = rel.filter((o) => o > 0.6).length, span = Math.max(...rel) - Math.min(...rel);
+  check(`track DRIFT 100: ${early} notes early, ${late} late, spread ${span.toFixed(1)}/16 of a step (at most 14)`,
+        early > 5 && late > 5 && span <= 14.6);
+  const glob = await onsets((g) => g.ex.web_gen(GP.DRIFT, 50));
+  const go = glob.map((o) => o.off), gm = [...go].sort((a, b) => a - b)[go.length >> 1], gspan = Math.max(...go) - Math.min(...go);
+  check(`global DRIFT 50 alone moves the tracks too (spread ${gspan.toFixed(1)}/16, at most 8)`, gspan > 1.5 && gspan <= 8.6);
+  const sw = await onsets((g) => g.ex.web_gen(GP.SWING, 50));
+  const odd = sw.filter((o) => o.k % 2 === 1), even = sw.filter((o) => o.k % 2 === 0);
+  const avg = (a) => a.reduce((x, o) => x + o.off, 0) / a.length;
+  check(`global SWING 50: odd steps ${avg(odd).toFixed(1)}/16 late, even ${avg(even).toFixed(1)} (expect 3.2, 0)`,
+        Math.abs(avg(odd) - 3.2) < 0.6 && Math.abs(avg(even)) < 0.6);
+  const tsw = await onsets((g) => g.ex.web_gen(tk(2, GK.SWING), 100));
+  const todd = tsw.filter((o) => o.k % 2 === 1);
+  check(`track SWING 100: odd steps ${avg(todd).toFixed(1)}/16 late (expect 6.4)`, Math.abs(avg(todd) - 6.4) < 0.6);
+  // everything at once: DRIFT 100 and SWING 100 on all four tracks, odd lengths: no stuck notes, all in key
+  const h = await device();
+  h.render(1200);
+  h.ex.web_gen(GP.ON, 1);
+  h.ex.web_gen(GP.SWING, 100);
+  for (let t = 0; t < 4; t++) { h.ex.web_gen(tk(t, GK.DRIFT), 100); h.ex.web_gen(tk(t, GK.LEN), [16, 7, 5, 1][t]); }
+  h.ex.web_gen(GP.PLAY, 1);
+  h.render(12000);
+  h.ex.web_gen(GP.PLAY, 0);
+  h.render(1000);
+  const hold = new Map();
+  let bad = 0;
+  for (const e of h.midi) {
+    const key = (e.st & 15) * 128 + e.n;
+    if ((e.st & 0xf0) === 0x90) hold.set(key, (hold.get(key) || 0) + 1);
+    else if (hold.get(key)) hold.set(key, hold.get(key) - 1); else bad++;
+  }
+  const left = [...hold.values()].reduce((x, y) => x + y, 0), hon = h.midi.filter((e) => (e.st & 0xf0) === 0x90);
+  check(`DRIFT 100 + SWING 100, lengths 16/7/5/1: ${hon.length} notes, ${left} left sounding after STOP, all in C major`,
+        hon.length > 100 && bad === 0 && left === 0 && hon.every((e) => MAJ.has(e.n % 12)));
 }
 
 console.log(fails ? `gen: ${fails} failed` : "gen: all ok");

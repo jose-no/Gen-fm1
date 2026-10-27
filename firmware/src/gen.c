@@ -30,11 +30,11 @@ enum { GO_BOTH, GO_INT, GO_MIDI };                             /* output */
 /* parameter ids (web_gen / the UI): globals, then 16 per track from GP_TRK */
 enum {
     GP_ON, GP_ROOT, GP_SCALE, GP_UMASK, GP_SRC, GP_PRESET, GP_PLEN, GP_RATE, GP_MUT, GP_COMBINE, GP_BPM, GP_PLAY,
-    GP_REGEN, GP_MACRO,
+    GP_REGEN, GP_MACRO, GP_DRIFT, GP_SWING,
     GP_TRK = 16
 };
 enum { GK_MULT, GK_LOCK, GK_FREEZE, GK_OUT, GK_MODE, GK_RHY, GK_DENS, GK_OCT, GK_LEAP, GK_REST, GK_PATCH, GK_MUTE,
-       GK_LEN, GK_DMSRC, GK_DMRATE, GK_DMDEPTH, GK_WEIGHT, GK_CHANCE, GK_N = 24 };
+       GK_LEN, GK_DMSRC, GK_DMRATE, GK_DMDEPTH, GK_WEIGHT, GK_CHANCE, GK_DRIFT, GK_SWING, GK_N = 24 };
 
 /* the master rate: steps (1/16) per chord, 1/2 bar .. 32 bars, odd lengths too */
 static const uint16_t GEN_RATE[] = {8, 16, 32, 48, 64, 80, 96, 112, 128, 192, 256, 384, 512};
@@ -85,6 +85,8 @@ typedef struct {
     int8_t dmdepth;                      /* how far it moves DENSITY, -100..100 (negative: upside down) */
     int8_t weight;                       /* how far the MACRO moves this track's DENSITY, -100..100 */
     uint8_t chance;                      /* each note it writes plays at this chance, 1..100 % (the sequencer rolls) */
+    uint8_t drift;                       /* how far its notes may land off the grid, 0..100 (+ the global DRIFT) */
+    uint8_t swing;                       /* its own SWING, 0..100 (Felucca's P_SSWING; + the global one) */
 } gen_trk_t;
 
 static struct {
@@ -101,6 +103,7 @@ static struct {
     uint32_t seed;
     volatile uint8_t regen;              /* the UI asks for a new loop */
     volatile int8_t macro;               /* the MACRO knob, -100..100: every track's DENSITY by its WEIGHT */
+    uint8_t drift;                       /* DRIFT for every track, 0..100, added to each track's own */
     /* what plays now, for the screen / the page */
     volatile uint8_t cur_m, cur_t[NPART];
 } gen;
@@ -508,15 +511,36 @@ static void gen_draw(uint32_t ti, uint32_t idx)
     dc->ok = 1;
 }
 
+/* DRIFT: a note step lands off the grid by a new random amount each time it is written, early or late, most often
+ * near the grid (the difference of two even draws). In Felucca's NUDGE: 1/16 of a step, -7..+7 at DRIFT 100 (the
+ * track's QUANTIZE is off, gen_setup.c). A one-step pattern drifts late only (its next step is itself, written as
+ * it starts: too late to play early) */
+static void gen_drift(uint32_t ti, step_t *st)
+{
+    uint32_t a = gen.tk[ti].drift + gen.drift, m;
+    int32_t off;
+    a = a > 100u ? 100u : a;
+    m = (a * 7u + 50u) / 100u;
+    if (st->time != ST_NOTE || !m) {
+        step_set_nudge(st, 0);
+        return;
+    }
+    off = (int32_t)(gen_rnd() % (m + 1u)) - (int32_t)(gen_rnd() % (m + 1u));
+    if (gen_len(ti) == 1u && off < 0)
+        off = -off;
+    step_set_nudge(st, off);
+}
+
 /* step s of track ti into step idx of its pattern */
 static void gen_write(track_t *t, uint32_t ti, uint32_t s, uint32_t idx)
 {
     gen_dec_t *dc = &gen.dec[ti][idx];
     step_t *st = &t->step[idx];
     gen_idx = idx;
-    if (gen.tk[ti].freeze) {             /* the pattern stays; CHANCE still applies to its notes */
+    if (gen.tk[ti].freeze) {             /* the pattern stays; CHANCE and DRIFT still apply to its notes */
         if (st->time == ST_NOTE)
             step_set_chance(st, gen.tk[ti].chance);
+        gen_drift(ti, st);
         return;
     }
     if (!dc->ok || gen_pct(gen.mut))
@@ -531,6 +555,7 @@ static void gen_write(track_t *t, uint32_t ti, uint32_t s, uint32_t idx)
         gen_put(st, 0, 0, ST_REST, 0);
     if (st->time == ST_NOTE)
         step_set_chance(st, gen.tk[ti].chance);   /* (100: always, as the steps the sequencer had) */
+    gen_drift(ti, st);
 }
 
 /* the master's pass over the loop: a new pass mutates it (written steps ahead see the new chords) */
@@ -640,11 +665,11 @@ static int gen_midi_cc(uint32_t cc, uint32_t value)
 static void gen_defaults(void)
 {
     static const gen_trk_t D[NPART] = {
-        /* mult lock frz out mode     rhy      dens leap rest patch mute oct len dm: src rate depth  weight chance */
-        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0, 16, 0, 3, 0, 60, 100},      /* dyad A: TINE EP */
-        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0, 16, 0, 3, 0, 80, 100},    /* dyad B: PAD, x2 */
-        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0, 16, 0, 3, 0, 40, 100},             /* bass: FM BASS, locked */
-        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0, 16, 0, 3, 0, 100, 100},         /* melody: PLUCK */
+        /* mult lock frz out mode     rhy      dens leap rest patch mute oct len dm: src rate depth  weight chance drift swing */
+        {2, 0, 0, GO_BOTH, GD_3RD, GY_SUST, 50, 0, 0, 0, 0, 0, 16, 0, 3, 0, 60, 100, 0, 0},      /* dyad A: TINE EP */
+        {3, 0, 0, GO_BOTH, GD_AUTO, GY_PULSE, 40, 0, 0, 4, 0, 0, 16, 0, 3, 0, 80, 100, 0, 0},    /* dyad B: PAD, x2 */
+        {2, 1, 0, GO_BOTH, GB_R5, 0, 45, 0, 0, 2, 0, 0, 16, 0, 3, 0, 40, 100, 0, 0},             /* bass: FM BASS, locked */
+        {2, 0, 0, GO_BOTH, GM_PASS, 0, 45, 25, 20, 7, 0, 0, 16, 0, 3, 0, 100, 100, 0, 0},         /* melody: PLUCK */
     };
     uint32_t i;
     gen.root = 0;

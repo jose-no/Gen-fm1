@@ -36,6 +36,8 @@ The generator writes each step into the track's Felucca pattern just before the 
 | Master rate | ½ bar to 32 bars | How long the master stays on each chord. Includes 3, 5, 7, 12 and 24 bars |
 | Dyad B | Independent, Merge, Call and response | How the two dyad tracks relate (below) |
 | Mutation | 0–100 | How much the patterns and the loop change each time round |
+| Drift (all tracks) | 0–100 | Adds drift to every track, on top of each track's own (below) |
+| Swing (all tracks) | 0–100 | Swing for every track, added to each track's own. At 100 every second sixteenth lands 0.4 of a step late |
 | Macro | −100 to +100 | One knob that pushes every track's density up or down, each by its own macro weight. MIDI CC 16 on any channel turns it (64 is the centre). Double-click the slider to centre it |
 | New progression | button | Draws a whole new loop now |
 
@@ -84,7 +86,9 @@ Every track has these:
 | Mod depth | How far the mod moves the density, −100 to +100. Negative values turn the shape upside down. The meter shows the density in use right now |
 | Macro weight | How much, and which way, the macro moves this track's density, −100 to +100. At 100 the macro's full swing moves the density by 100; a negative weight thins the track as the macro rises |
 | Chance | 1–100 %. Each note this track writes plays only at this chance, rolled every time the step comes round, so even a frozen pattern never repeats exactly. At 100 % every note plays |
-| Freeze | Stop writing this track: its current bar loops as it is, through chord changes too. Chance still applies |
+| Drift | 0–100. Each note lands a little early or a little late, by a new random amount every time it plays: most land near the grid, a few further out. At 100 a note can move up to 7/16 of a step either way. The global drift is added to this |
+| Swing | 0–100. Delays every second sixteenth of this track, added to the global swing (together at most 100). Unlike drift it is the same every bar |
+| Freeze | Stop writing this track: its current bar loops as it is, through chord changes too. Chance and drift still apply |
 | Mute | Silence the track; it keeps running underneath |
 
 The card header shows the track's MIDI channel and the chord it is playing now. The strip under it shows which step of the pattern is playing.
@@ -140,6 +144,7 @@ MIDI CC 16, on any channel, turns the macro. Other incoming MIDI plays the track
 
 - **Slow harmony, busy parts:** set the master rate to 4 or 8 bars, raise the melody's density, and set dyad B to ×½ so it moves twice as often as the master.
 - **One-knob build:** set the macro weights to Dyad A 30, Dyad B 60, Bass 20 and Melody 100, start the macro at −100 and bring it up over a few minutes, so the melody arrives last and the bass barely moves. Map it to a knob on a controller with CC 16.
+- **Human feel:** give the melody a drift of about 30 and the bass 10, with a global swing of 20. For a looser, half-asleep feel, raise the global drift instead.
 - **Loose loops:** freeze a melody you like and set its chance to about 70 %, so the phrase stays recognisable but drops different notes each time.
 - **Breathing parts:** give the melody a Sine density mod over 8 bars and the dyads a Square over 4, so the parts take turns being busy.
 - **Shifting patterns:** give the melody 5 or 7 steps and the bass 12, so the parts line up differently every bar.
