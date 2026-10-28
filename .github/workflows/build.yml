@@ -108,6 +108,10 @@ jobs:
           mkdir -p site/try
           cp -r build/control/. site/
           cp -r build/genemu/. site/try/
+          # the web installer, around this build's package: site/install/ (opens webapp/installer/)
+          PKG=$(ls build/*.fwsc | head -1)
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then VER="${GITHUB_REF_NAME#v}"; else VER="dev-${GITHUB_SHA::7}"; fi
+          python3 web/make_install_page.py "$PKG" "$VER" site
           touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         if: github.event_name != 'pull_request'
