@@ -34,9 +34,11 @@ See [docs/MANUAL.md](docs/MANUAL.md) for every control.
 
 Once Pages is on for the repository, the control page is at https://jose-no.github.io/Gen-fm1/ and the test page at https://jose-no.github.io/Gen-fm1/try/. Connect the FM-1 with USB, open the page in Chrome or Edge, and press **Connect FM-1**, or press **Virtual FM-1** to try it without one. See the manual's [Control page](docs/MANUAL.md#control-page) section.
 
-## Getting the firmware
+## Installing
 
-Every push to `main` builds the package on GitHub Actions (the **build** workflow): the run's **gen-fm1-firmware** artifact holds `felucca.fwsc`. A tag such as `v0.1` makes a GitHub release with it. Install it as any Felucca release (Felucca's web installer, or M-VAVE's updater). Installing other firmware on the FM-1 is at your own risk; Felucca's web installer can put M-VAVE's firmware back.
+Open the installer at **https://jose-no.github.io/Gen-fm1/webapp/installer/** in Chrome or Edge, connect the FM-1 with a USB data cable, and press **Install**. It is Felucca's installer, unchanged, with Gen-FM1's package: it works from M-VAVE's firmware or from Felucca, and its **Return to official V15** puts M-VAVE's firmware back (download M-VAVE's FM-1.fwsc first). See the manual's [Installing](docs/MANUAL.md#installing) section.
+
+Every push to `main` builds the package on GitHub Actions (the **build** workflow; the run's **gen-fm1-firmware** artifact). The version is in `GEN_VERSION`; a tag such as `v0.1` also makes a GitHub release. Installing other firmware on the FM-1 is at your own risk.
 
 ## Try it in the browser
 

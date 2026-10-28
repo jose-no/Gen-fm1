@@ -211,7 +211,13 @@ static void fm1_main(void)
         settings_save();
     }
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
-    gen_boot();                               /* the generator: on from power-on (gen_setup.c) */
+    /* the generator: on from power-on (gen_setup.c). Left off, as plain Felucca, when ARP is held at power-on or the
+     * last boot failed (bootguard: it died within its first 30 s), so a problem in it never stops the FM-1 starting;
+     * SAVE > POWER ON switches it on */
+    if (!bootguard.failed && !(fm1_in.buttons & (1u << panel.btn[B_ARP])))
+        gen_boot();
+    else
+        ui_message("GENERATOR OFF");
     for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
         fm1_delay_ms(10);
         master_poll();

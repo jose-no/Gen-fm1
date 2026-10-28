@@ -69,8 +69,7 @@ jobs:
 
       # the build: app + loader + package, and its checks (flash size, RAM, stack, the HAL rule)
       - name: Build the firmware
-        run: |
-          if [ "${GITHUB_REF_TYPE}" = tag ]; then ./build.sh --release "${GITHUB_REF_NAME#v}"; else ./build.sh; fi
+        run: ./build.sh
 
       - name: Package
         run: ls -l build/*.fwsc build/felucca.bin build/loader/ota.bin
@@ -93,19 +92,31 @@ jobs:
           node web/control/control_page_test.mjs build/control virtual
           node web/control/control_page_test.mjs build/control usb
 
+      # the package the installer page installs: a release build (identity FM-1_9XY, version vX.Y). On main it is the
+      # version in GEN_VERSION; a tag vX.Y builds that version
+      - name: Installer package
+        run: |
+          V="$(cat GEN_VERSION)"
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then V="${GITHUB_REF_NAME#v}"; fi
+          ./build.sh --release "$V"
+          echo "GEN_V=$V" >> "$GITHUB_ENV"
+          ls -l build/felucca-$V.fwsc
+
       - name: Keep the package
         uses: actions/upload-artifact@v4
         with:
           name: gen-fm1-firmware
           path: |
-            build/*.fwsc
-            build/felucca.bin
+            build/felucca-*.fwsc
             build/release-*/
           if-no-files-found: error
 
       - name: The web pages
         run: |
           mkdir -p site/try
+          python3 web/make_site.py "build/felucca-$GEN_V.fwsc" "$GEN_V" build/site-felucca
+          cp -r build/site-felucca/webapp build/site-felucca/firmware site/
+          python3 tools/gen_installer_page.py site/webapp/installer/index.html
           cp -r build/control/. site/
           cp -r build/genemu/. site/try/
           touch site/.nojekyll

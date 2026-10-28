@@ -2,6 +2,22 @@
 
 Gen-FM1 turns the FM-1 into four generative tracks that play together in one key. Every setting can be made in two places: on the FM-1 itself (its screen, knobs and keys) and on the control page, a web page that talks to the FM-1 over USB. The two stay in step: turn a knob on the FM-1 and the page moves; change something on the page and the FM-1's screen shows it. Everything else on the FM-1 (the panel, the screen, the SEQ page, MIDI in) works as in [Felucca](https://github.com/hugelton/Felucca/wiki).
 
+## Installing
+
+Gen-FM1 has not been run on a real FM-1 before this version. Install it knowing that, and keep a way back ready.
+
+1. **Get a way back first.** Download the official FM-1 firmware (FM-1.fwsc, V15) from [M-VAVE's downloads](https://www.m-vave.com/download) and keep the file.
+2. Open the installer, **https://jose-no.github.io/Gen-fm1/webapp/installer/**, in Chrome or Edge on a computer.
+3. Connect the FM-1 straight to the computer with a USB **data** cable (not a hub, not a charge-only cable), and switch it on. Close other apps that use MIDI (a DAW, the control page).
+4. Press **Install** and allow MIDI (with SysEx) when the browser asks. The FM-1 switches to update mode, the package is written, and the FM-1 restarts. Don't unplug it while it writes; if the connection drops, plug it back in and press Install again: it finishes the write.
+5. The FM-1 starts with the generator on. Press **PLAY**.
+
+**If something goes wrong**
+- **Start without the generator:** hold **ARP** while switching on. The FM-1 starts as plain Felucca and shows GENERATOR OFF; SAVE > POWER ON switches the generator on again.
+- **If it crashes at start-up**, the next start-up leaves the generator off by itself. After two failed start-ups in a row, Felucca's boot guard stops starting the firmware and puts the FM-1 in the chip's own update mode (UBOOT) instead, for M-VAVE's updater or a Transporter to write firmware. Holding **OCT−** and **OCT+** for 5 seconds while it runs does the same.
+- **Back to M-VAVE's firmware:** on the installer page, open **Return to official V15**, choose the FM-1.fwsc from step 1, and follow it. It saves a backup first.
+- If an install is cut off and the FM-1 will not start at all, recovery needs a [Transporter](https://github.com/kurogedelic/FM-1-transporter).
+
 ## Getting started
 
 1. Switch the FM-1 on. The generator starts with it, with a new setup drawn at random: key, scale, tempo, progression, and each track's sound, rhythm and density (see [Random setups](#random-setups)).
